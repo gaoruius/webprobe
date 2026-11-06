@@ -3,8 +3,9 @@
 A front-end QA agent that explores a web app in a real browser, finds bugs, and files
 structured bug reports — plus an eval suite that measures how well (and how reliably) it does.
 
-> Status: **week 2.** The test site and the browser tool server work — a scripted run through the
-> MCP tools reproduces all 5 seeded bugs. The agent loop and eval runner come next.
+> Status: **week 3.** The test site and the browser tool server work — a scripted run through the
+> MCP tools reproduces all 5 seeded bugs. The agent loop is written and waiting for its first
+> real run; the eval runner comes next.
 
 ## Layout
 
@@ -13,9 +14,13 @@ webprobe/
 ├── buggyshop/            Next.js shop with seeded, switchable bugs (the eval target)
 │   ├── lib/bugs.ts       bug switches (NEXT_PUBLIC_BUGS)
 │   └── bugs.manifest.json  ground truth for the eval — the agent never sees it
-└── browser-mcp/          MCP server: the agent's only way to touch the browser
-    ├── src/server.ts     tools: navigate, snapshot, click, type, console_errors, network_errors
-    └── src/smoke-test.ts scripted run that reproduces every seeded bug through the tools
+├── browser-mcp/          MCP server: the agent's only way to touch the browser
+│   ├── src/server.ts     tools: navigate, snapshot, click, type, console_errors, network_errors
+│   └── src/smoke-test.ts scripted run that reproduces every seeded bug through the tools
+└── agent/                hand-written agent loop (Claude API + MCP client)
+    ├── src/agent.ts      the loop: budgets, stuck detection, append-only history
+    ├── src/tools.ts      report_bug and finish, the agent's own tools
+    └── src/run.ts        one run against BuggyShop → runs/<time>/report.json
 ```
 
 ## Run it
@@ -29,6 +34,12 @@ cd buggyshop && npm install && npm run dev        # http://localhost:3000
 # 2. the browser MCP server (in another terminal)
 cd browser-mcp && npm install && npx playwright install chromium
 npm run smoke                                      # 16 checks; exits 1 if any fail
+```
+
+```bash
+# 3. the agent (needs ANTHROPIC_API_KEY in agent/.env)
+cd agent && npm install && npm start
+#    budgets: WEBPROBE_MAX_STEPS (40), WEBPROBE_MAX_COST_USD (2), WEBPROBE_EFFORT (medium)
 ```
 
 If `npx playwright install` can't download Chromium, use your installed Chrome:
@@ -72,13 +83,31 @@ Design choices:
   been in flight for 300 ms (max 3 s), so `network_errors` sees requests the action started.
 - Logs go to stderr because stdout carries the MCP protocol.
 
+## Agent loop
+
+Written by hand instead of with a framework or the SDK's tool runner, so every decision is visible:
+
+- **Two kinds of tools.** Browser tools come from the MCP server (`tools/list` maps almost 1:1
+  onto Claude tool definitions). `report_bug` and `finish` run in the agent process: they are
+  how results come back, so the bug list is structured data, not prose to parse.
+- **Hard stops.** A step budget and a dollar budget, computed from the API's token usage.
+  Three steps before the end the agent is told to file what it has and finish.
+- **Stuck detection.** The same call three times in a row gets a note telling it to change course.
+- **Append-only history.** Earlier turns are never edited or dropped. That keeps the prompt
+  cache valid (the history is re-read at the cache price) and is required for the model's
+  thinking blocks to stay valid.
+- **Least privilege.** The MCP server process does not get the API key.
+- **Generic prompt.** The system prompt describes how a QA engineer works, not the seeded bugs.
+  Naming them would score well here and teach nothing about other sites.
+
 ## Roadmap
 
 - [x] BuggyShop with 5 switchable bugs + ground-truth manifest
 - [x] MCP server: `navigate`, `snapshot`, origin allowlist, smoke test
 - [x] tools: `click`, `type`, `console_errors`, `network_errors`; network-level origin blocking
 - [ ] tool: `screenshot` (visual/layout bugs)
-- [ ] agent loop (hand-written first) with step/cost budgets and stuck detection
+- [x] agent loop (hand-written) with step/cost budgets and stuck detection
+- [ ] first real runs; eval runner: recall / precision against the manifest, false positives on the clean build, repeated runs
 - [ ] `BugReport` schema (zod) for structured output
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
 - [ ] eval runner: recall, precision, pass^k, injection resistance, cost per run
