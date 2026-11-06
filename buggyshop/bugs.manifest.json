@@ -1,0 +1,50 @@
+{
+  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file.",
+  "bugs": [
+    {
+      "id": "cart-zero-qty",
+      "category": "functional",
+      "severity": "major",
+      "page": "/cart",
+      "summary": "Setting an item's quantity to 0 leaves the item in the cart and the total still includes it.",
+      "expected": "Item is removed and the total drops accordingly.",
+      "how_to_trigger": "Add any product, open /cart, change its quantity to 0."
+    },
+    {
+      "id": "signup-email-validation",
+      "category": "validation",
+      "severity": "major",
+      "page": "/signup",
+      "summary": "Sign-up accepts an invalid email address such as 'not-an-email'.",
+      "expected": "Form shows 'Please enter a valid email address.' and does not create the account.",
+      "how_to_trigger": "Submit /signup with email 'not-an-email' and an 8+ character password."
+    },
+    {
+      "id": "product-img-alt",
+      "category": "a11y",
+      "severity": "minor",
+      "page": "/",
+      "summary": "Product images on the home page have no alt text.",
+      "expected": "Each product image has alt text with the product name.",
+      "how_to_trigger": "Inspect the images on / (accessibility tree shows unnamed images)."
+    },
+    {
+      "id": "coupon-500-silent",
+      "category": "network",
+      "severity": "major",
+      "page": "/cart",
+      "summary": "Applying a coupon gets a 500 from /api/coupon and the page shows no error message.",
+      "expected": "User sees an error message when the coupon cannot be applied.",
+      "how_to_trigger": "Add a product, open /cart, enter SAVE10, click Apply."
+    },
+    {
+      "id": "reviews-tab-typeerror",
+      "category": "console",
+      "severity": "major",
+      "page": "/product/mug",
+      "summary": "Clicking the Reviews tab throws a TypeError in the console and the tab does not open.",
+      "expected": "Reviews tab opens and lists the reviews.",
+      "how_to_trigger": "Open /product/mug and click 'Reviews (2)'."
+    }
+  ]
+}
