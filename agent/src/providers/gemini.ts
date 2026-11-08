@@ -3,7 +3,7 @@
 // Like the Claude provider, the history is append-only: we push each model turn back
 // exactly as it arrived, so its thought signatures stay attached to the function calls.
 
-import { GoogleGenAI, ThinkingLevel, type Content, type Part } from "@google/genai";
+import { ApiError, GoogleGenAI, ThinkingLevel, type Content, type Part } from "@google/genai";
 import type { Effort, Provider, ProviderOptions, ToolResult, Turn } from "./types.js";
 
 export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
@@ -21,8 +21,8 @@ const BLOCKED = new Set(["SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "R
 export function gemini(opts: ProviderOptions): Provider {
   const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY,
-    // The free tier has tight per-minute limits; back off and retry on 429 instead of failing.
-    httpOptions: { retryOptions: { attempts: 8, initialDelay: 5, maxDelay: 60 } },
+    // The SDK retries server errors; 429 we handle ourselves in withRetry.
+    httpOptions: { retryOptions: { attempts: 5, initialDelay: 5, maxDelay: 60, httpStatusCodes: [408, 500, 502, 503, 504] } },
   });
   const model = opts.model ?? DEFAULT_GEMINI_MODEL;
   const contents: Content[] = [{ role: "user", parts: [{ text: opts.firstMessage }] }];
@@ -50,7 +50,7 @@ export function gemini(opts: ProviderOptions): Provider {
     price: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 },
 
     async next(): Promise<Turn> {
-      const response = await withNetworkRetry(() => ai.models.generateContent({ model, contents, config }));
+      const response = await withRetry(() => ai.models.generateContent({ model, contents, config }));
 
       // promptTokenCount includes the cached part; thinking tokens are billed as output.
       const meta = response.usageMetadata;
@@ -101,15 +101,22 @@ export function gemini(opts: ProviderOptions): Provider {
   };
 }
 
-// The SDK retries HTTP errors like 429 and 503, but not a request that never got a response
-// (connection refused or reset). Retry those too, backing off up to a minute, which rides
-// out a network outage of a few minutes.
-async function withNetworkRetry<T>(call: () => Promise<T>, attempts = 8): Promise<T> {
+// Two failures the SDK does not retry for us:
+// - a request that never got a response (connection refused or reset): back off up to a
+//   minute, which rides out a network outage of a few minutes;
+// - 429. A per-minute limit clears soon, so wait and retry. The free tier also has a daily
+//   request limit; waiting hours for that helps nobody, so fail at once and say so.
+async function withRetry<T>(call: () => Promise<T>, attempts = 8): Promise<T> {
   for (let i = 1; ; i++) {
     try {
       return await call();
     } catch (err) {
-      if (i >= attempts || !(err instanceof TypeError && err.message === "fetch failed")) throw err;
+      const dropped = err instanceof TypeError && err.message === "fetch failed";
+      const limited = err instanceof ApiError && err.status === 429;
+      if (limited && /per day/i.test(err.message)) {
+        throw new Error(`Gemini daily quota used up: ${err.message.match(/Please retry in [^.]*\./)?.[0] ?? ""}`);
+      }
+      if (i >= attempts || !(dropped || limited)) throw err;
       await new Promise((r) => setTimeout(r, Math.min(5000 * 2 ** (i - 1), 60_000)));
     }
   }

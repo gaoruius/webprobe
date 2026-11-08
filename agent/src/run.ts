@@ -1,7 +1,7 @@
 // Run the agent once against BuggyShop and save what it did.
 //
 //   npm start                              (BuggyShop must be running on localhost:3000)
-//   WEBPROBE_PROVIDER=gemini npm start     (Gemini instead of Claude)
+//   WEBPROBE_PROVIDER=gemini npm start     (Gemini instead of Claude; also: groq)
 //
 // Writes runs/<timestamp>/report.json (bugs, cost, stop reason, every tool call) and
 // transcript.json (the full message history, for debugging the agent).
@@ -15,10 +15,17 @@ import { PROVIDERS, runAgent, type AgentOptions, type ProviderName } from "./age
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const target = process.env.WEBPROBE_TARGET ?? "http://localhost:3000";
-// Default to whichever provider we have a key for, Claude first.
-const hasClaudeKey = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+// Default to whichever provider we have a key for, in this order.
+const KEY_VARS: Record<ProviderName, string> = {
+  claude: "ANTHROPIC_API_KEY",
+  gemini: "GEMINI_API_KEY",
+  groq: "GROQ_API_KEY",
+};
+const hasKey = (p: ProviderName) =>
+  Boolean(process.env[KEY_VARS[p]] || (p === "claude" && process.env.ANTHROPIC_AUTH_TOKEN));
 const provider = (process.env.WEBPROBE_PROVIDER ??
-  (hasClaudeKey || !process.env.GEMINI_API_KEY ? "claude" : "gemini")) as ProviderName;
+  (Object.keys(KEY_VARS) as ProviderName[]).find(hasKey) ??
+  "claude") as ProviderName;
 const model = process.env.WEBPROBE_MODEL || undefined;
 const maxSteps = Number(process.env.WEBPROBE_MAX_STEPS ?? 40);
 const maxCostUsd = Number(process.env.WEBPROBE_MAX_COST_USD ?? 2);
@@ -28,9 +35,8 @@ if (!(provider in PROVIDERS)) {
   console.error(`Unknown WEBPROBE_PROVIDER "${provider}". Use one of: ${Object.keys(PROVIDERS).join(", ")}`);
   process.exit(1);
 }
-const keyVar = provider === "claude" ? "ANTHROPIC_API_KEY" : "GEMINI_API_KEY";
-if (provider === "claude" ? !hasClaudeKey : !process.env.GEMINI_API_KEY) {
-  console.error(`No API key. Put ${keyVar}=... in agent/.env (it is gitignored).`);
+if (!hasKey(provider)) {
+  console.error(`No API key. Put ${KEY_VARS[provider]}=... in agent/.env (it is gitignored).`);
   process.exit(1);
 }
 
@@ -43,7 +49,8 @@ try {
 
 // The MCP server gets our environment minus the API keys: it drives a browser and never
 // needs to call a model.
-const { ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, GEMINI_API_KEY, GOOGLE_API_KEY, ...env } = process.env;
+const { ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, GEMINI_API_KEY, GOOGLE_API_KEY, GROQ_API_KEY, ...env } =
+  process.env;
 const mcp = new Client({ name: "webprobe-agent", version: "0.1.0" });
 await mcp.connect(
   new StdioClientTransport({

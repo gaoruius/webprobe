@@ -3,15 +3,16 @@
 // or it runs out of money.
 //
 // The loop knows nothing about any one model API. Providers (providers/claude.ts,
-// providers/gemini.ts) turn our tool definitions and results into their own format.
+// gemini.ts, groq.ts) turn our tool definitions and results into their own format.
 
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { claude } from "./providers/claude.js";
 import { gemini } from "./providers/gemini.js";
+import { groq } from "./providers/groq.js";
 import type { Effort, Provider, ProviderOptions, ToolDef, ToolResult, ToolUse, Usage } from "./providers/types.js";
 import { BugReport, Finish, localTools } from "./tools.js";
 
-export const PROVIDERS = { claude, gemini } as const;
+export const PROVIDERS = { claude, gemini, groq } as const;
 export type ProviderName = keyof typeof PROVIDERS;
 
 export type AgentOptions = {
