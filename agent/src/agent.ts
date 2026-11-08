@@ -26,6 +26,11 @@ export type AgentOptions = {
   log?: (line: string) => void;
 };
 
+// After the step budget runs out, the model gets this many extra turns in which only
+// report_bug and finish work. Without it, a model that explores until the last step
+// ends the run having filed nothing it saw.
+const WRAP_UP_TURNS = 5;
+
 export type ToolCall = { step: number; name: string; input: unknown; isError: boolean; output: string };
 
 export type AgentResult = {
@@ -94,6 +99,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       bugs.push(parsed.data);
       return { use, output: `Filed bug #${bugs.length}.`, isError: false };
     }
+    if (step > opts.maxSteps && use.name !== "finish") {
+      return { use, output: "Out of steps: only report_bug and finish work now.", isError: true };
+    }
     if (use.name === "finish") {
       const parsed = Finish.safeParse(use.input);
       summary = parsed.success ? parsed.data.summary : "";
@@ -109,7 +117,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     return { use, output, isError: Boolean(res.isError) };
   }
 
-  while (step < opts.maxSteps) {
+  while (step < opts.maxSteps + WRAP_UP_TURNS) {
     if (cost() >= opts.maxCostUsd) {
       stoppedBecause = "max_cost";
       break;
@@ -151,6 +159,12 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     const left = opts.maxSteps - step;
     if (left === 3) {
       notes.push(`Only ${left} steps left. File any bugs you have confirmed, then call finish.`);
+    }
+    if (left === 0) {
+      notes.push(
+        "You are out of steps and the browser tools are now disabled. File every bug you " +
+          "observed with report_bug, then call finish.",
+      );
     }
 
     model.addResults(results, notes);
