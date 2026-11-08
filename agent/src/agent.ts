@@ -2,39 +2,42 @@
 // results, repeat. Three things stop it: the model calls `finish`, it runs out of steps,
 // or it runs out of money.
 //
-// The message history is append-only. We never edit or drop earlier turns: that keeps the
-// prompt cache valid (each request re-reads the whole history at ~5% of the input price),
-// and Claude Opus 5.5 rejects edited history that carries its thinking blocks.
+// The loop knows nothing about any one model API. Providers (providers/claude.ts,
+// providers/gemini.ts) turn our tool definitions and results into their own format.
 
-import Anthropic from "@anthropic-ai/sdk";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { claude } from "./providers/claude.js";
+import { gemini } from "./providers/gemini.js";
+import type { Effort, Provider, ProviderOptions, ToolDef, ToolResult, ToolUse, Usage } from "./providers/types.js";
 import { BugReport, Finish, localTools } from "./tools.js";
 
-export const MODEL = "claude-opus-5-5";
-
-// USD per million tokens for MODEL. Cache writes (5-minute TTL) cost 1.25x input.
-const PRICE = { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.2 };
+export const PROVIDERS = { claude, gemini } as const;
+export type ProviderName = keyof typeof PROVIDERS;
 
 export type AgentOptions = {
   mcp: Client;
   target: string;
+  provider: ProviderName;
+  model?: string;
   maxSteps: number;
   maxCostUsd: number;
-  effort: "low" | "medium" | "high" | "xhigh" | "max";
+  effort: Effort;
   log?: (line: string) => void;
 };
 
 export type ToolCall = { step: number; name: string; input: unknown; isError: boolean; output: string };
 
 export type AgentResult = {
+  provider: ProviderName;
+  model: string;
   bugs: BugReport[];
   summary: string;
   stoppedBecause: "finished" | "ended_turn" | "max_steps" | "max_cost" | "refusal" | "max_tokens";
   steps: number;
-  usage: { input: number; output: number; cacheWrite: number; cacheRead: number };
+  usage: Usage;
   costUsd: number;
   toolCalls: ToolCall[];
-  messages: Anthropic.Beta.BetaMessageParam[];
+  messages: unknown;
 };
 
 const systemPrompt = (target: string) => `You are a QA engineer testing the web app at ${target}.
@@ -47,31 +50,31 @@ You can only reach ${target}. Element refs change whenever the page updates, so 
 
 export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const log = opts.log ?? (() => {});
-  const client = new Anthropic();
 
-  // MCP tool definitions map almost 1:1 onto Anthropic tool definitions.
+  // MCP tool definitions map almost 1:1 onto model tool definitions.
   const { tools: mcpTools } = await opts.mcp.listTools();
-  const browserTools: Anthropic.Beta.BetaTool[] = mcpTools.map((t) => {
+  const browserTools: ToolDef[] = mcpTools.map((t) => {
     const { $schema, ...schema } = t.inputSchema as Record<string, unknown>;
-    return {
-      name: t.name,
-      description: t.description ?? "",
-      input_schema: schema as Anthropic.Beta.BetaTool.InputSchema,
-    };
+    return { name: t.name, description: t.description ?? "", schema };
   });
-  const tools = [...browserTools, ...localTools];
 
-  const messages: Anthropic.Beta.BetaMessageParam[] = [
-    { role: "user", content: `Test ${opts.target} and report every bug you find.` },
-  ];
+  const providerOptions: ProviderOptions = {
+    model: opts.model,
+    system: systemPrompt(opts.target),
+    firstMessage: `Test ${opts.target} and report every bug you find.`,
+    tools: [...browserTools, ...localTools],
+    effort: opts.effort,
+  };
+  const model: Provider = PROVIDERS[opts.provider](providerOptions);
+
   const bugs: BugReport[] = [];
   const toolCalls: ToolCall[] = [];
-  const usage = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
+  const usage: Usage = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
   const cost = () =>
-    (usage.input * PRICE.input +
-      usage.output * PRICE.output +
-      usage.cacheWrite * PRICE.cacheWrite +
-      usage.cacheRead * PRICE.cacheRead) /
+    (usage.input * model.price.input +
+      usage.output * model.price.output +
+      usage.cacheWrite * model.price.cacheWrite +
+      usage.cacheRead * model.price.cacheRead) /
     1e6;
 
   let summary = "";
@@ -81,26 +84,26 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let step = 0;
   let finished = false;
 
-  async function runTool(use: Anthropic.Beta.BetaToolUseBlock) {
+  async function runTool(use: ToolUse): Promise<ToolResult> {
     if (use.name === "report_bug") {
       const parsed = BugReport.safeParse(use.input);
-      if (!parsed.success) return { output: `Invalid report: ${parsed.error.message}`, isError: true };
+      if (!parsed.success) return { use, output: `Invalid report: ${parsed.error.message}`, isError: true };
       bugs.push(parsed.data);
-      return { output: `Filed bug #${bugs.length}.`, isError: false };
+      return { use, output: `Filed bug #${bugs.length}.`, isError: false };
     }
     if (use.name === "finish") {
       const parsed = Finish.safeParse(use.input);
       summary = parsed.success ? parsed.data.summary : "";
       finished = true;
-      return { output: "Done.", isError: false };
+      return { use, output: "Done.", isError: false };
     }
     // Browser tool: forward to the MCP server. It validates the input itself and
     // returns errors as isError results, which we pass straight back to the model.
-    const res = await opts.mcp.callTool({ name: use.name, arguments: use.input as Record<string, unknown> });
+    const res = await opts.mcp.callTool({ name: use.name, arguments: use.input });
     const output = (res.content as { type: string; text?: string }[])
       .map((c) => c.text ?? `[${c.type}]`)
       .join("\n");
-    return { output, isError: Boolean(res.isError) };
+    return { use, output, isError: Boolean(res.isError) };
   }
 
   while (step < opts.maxSteps) {
@@ -110,58 +113,25 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     }
     step++;
 
-    const response = await client.beta.messages.create({
-      model: MODEL,
-      max_tokens: 16000,
-      system: systemPrompt(opts.target),
-      tools,
-      messages,
-      output_config: { effort: opts.effort },
-      // Cache everything up to the newest message, so the next request pays the cache-read
-      // price for the whole history instead of the full input price.
-      cache_control: { type: "ephemeral" },
-      // If a safety classifier declines the request, retry it on a fallback model inside
-      // the same call instead of ending the run.
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-    });
+    const turn = await model.next();
+    for (const k of Object.keys(usage) as (keyof Usage)[]) usage[k] += turn.usage[k];
+    for (const text of turn.text) log(`  ${text}`);
 
-    usage.input += response.usage.input_tokens;
-    usage.output += response.usage.output_tokens;
-    usage.cacheWrite += response.usage.cache_creation_input_tokens ?? 0;
-    usage.cacheRead += response.usage.cache_read_input_tokens ?? 0;
-
-    for (const block of response.content) {
-      if (block.type === "text" && block.text.trim()) log(`  ${block.text.trim()}`);
-    }
-
-    if (response.stop_reason === "refusal" || response.stop_reason === "max_tokens") {
-      stoppedBecause = response.stop_reason;
+    if (turn.stop !== "tool_use") {
+      stoppedBecause = turn.stop === "end_turn" ? "ended_turn" : turn.stop;
       break;
     }
 
-    messages.push({ role: "assistant", content: response.content });
-
-    const toolUses = response.content.filter(
-      (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use",
-    );
-    if (toolUses.length === 0) {
-      stoppedBecause = "ended_turn";
-      break;
+    const results: ToolResult[] = [];
+    for (const use of turn.toolUses) {
+      const result = await runTool(use);
+      results.push(result);
+      toolCalls.push({ step, name: use.name, input: use.input, isError: result.isError, output: result.output });
+      log(`${String(step).padStart(3)} ${result.isError ? "✗" : "→"} ${use.name} ${brief(use.input)}`);
     }
 
-    // Every tool_use needs a tool_result, all in one user message, errors included.
-    const results: Anthropic.Beta.BetaContentBlockParam[] = [];
-    for (const use of toolUses) {
-      const { output, isError } = await runTool(use);
-      toolCalls.push({ step, name: use.name, input: use.input, isError, output });
-      log(`${String(step).padStart(3)} ${isError ? "✗" : "→"} ${use.name} ${brief(use.input)}`);
-      results.push({ type: "tool_result", tool_use_id: use.id, content: output, is_error: isError });
-    }
-
-    // Notes for the model go after the tool results, in the same message.
     const notes: string[] = [];
-    const signature = toolUses.map((u) => u.name + JSON.stringify(u.input)).join("|");
+    const signature = turn.toolUses.map((u) => u.name + JSON.stringify(u.input)).join("|");
     repeats = signature === lastCall ? repeats + 1 : 0;
     lastCall = signature;
     if (repeats >= 2) {
@@ -171,16 +141,26 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     if (left === 3) {
       notes.push(`Only ${left} steps left. File any bugs you have confirmed, then call finish.`);
     }
-    for (const note of notes) results.push({ type: "text", text: note });
 
-    messages.push({ role: "user", content: results });
+    model.addResults(results, notes);
     if (finished) {
       stoppedBecause = "finished";
       break;
     }
   }
 
-  return { bugs, summary, stoppedBecause, steps: step, usage, costUsd: cost(), toolCalls, messages };
+  return {
+    provider: opts.provider,
+    model: model.model,
+    bugs,
+    summary,
+    stoppedBecause,
+    steps: step,
+    usage,
+    costUsd: cost(),
+    toolCalls,
+    messages: model.history(),
+  };
 }
 
 function brief(input: unknown): string {

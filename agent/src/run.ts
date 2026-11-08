@@ -1,6 +1,7 @@
 // Run the agent once against BuggyShop and save what it did.
 //
-//   npm start                      (BuggyShop must be running on localhost:3000)
+//   npm start                              (BuggyShop must be running on localhost:3000)
+//   WEBPROBE_PROVIDER=gemini npm start     (Gemini instead of Claude)
 //
 // Writes runs/<timestamp>/report.json (bugs, cost, stop reason, every tool call) and
 // transcript.json (the full message history, for debugging the agent).
@@ -10,16 +11,26 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { MODEL, runAgent, type AgentOptions } from "./agent.js";
+import { PROVIDERS, runAgent, type AgentOptions, type ProviderName } from "./agent.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const target = process.env.WEBPROBE_TARGET ?? "http://localhost:3000";
+// Default to whichever provider we have a key for, Claude first.
+const hasClaudeKey = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+const provider = (process.env.WEBPROBE_PROVIDER ??
+  (hasClaudeKey || !process.env.GEMINI_API_KEY ? "claude" : "gemini")) as ProviderName;
+const model = process.env.WEBPROBE_MODEL || undefined;
 const maxSteps = Number(process.env.WEBPROBE_MAX_STEPS ?? 40);
 const maxCostUsd = Number(process.env.WEBPROBE_MAX_COST_USD ?? 2);
 const effort = (process.env.WEBPROBE_EFFORT ?? "medium") as AgentOptions["effort"];
 
-if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-  console.error("No API key. Put ANTHROPIC_API_KEY=... in agent/.env (it is gitignored).");
+if (!(provider in PROVIDERS)) {
+  console.error(`Unknown WEBPROBE_PROVIDER "${provider}". Use one of: ${Object.keys(PROVIDERS).join(", ")}`);
+  process.exit(1);
+}
+const keyVar = provider === "claude" ? "ANTHROPIC_API_KEY" : "GEMINI_API_KEY";
+if (provider === "claude" ? !hasClaudeKey : !process.env.GEMINI_API_KEY) {
+  console.error(`No API key. Put ${keyVar}=... in agent/.env (it is gitignored).`);
   process.exit(1);
 }
 
@@ -30,9 +41,9 @@ try {
   process.exit(1);
 }
 
-// The MCP server gets our environment minus the API key: it drives a browser and never
-// needs to call the model.
-const { ANTHROPIC_API_KEY, ...env } = process.env;
+// The MCP server gets our environment minus the API keys: it drives a browser and never
+// needs to call a model.
+const { ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, GEMINI_API_KEY, GOOGLE_API_KEY, ...env } = process.env;
 const mcp = new Client({ name: "webprobe-agent", version: "0.1.0" });
 await mcp.connect(
   new StdioClientTransport({
@@ -44,9 +55,9 @@ await mcp.connect(
   }),
 );
 
-console.log(`WebProbe: ${MODEL}, effort ${effort}, up to ${maxSteps} steps / $${maxCostUsd} on ${target}\n`);
+console.log(`WebProbe: ${provider}, effort ${effort}, up to ${maxSteps} steps / $${maxCostUsd} on ${target}\n`);
 const started = Date.now();
-const result = await runAgent({ mcp, target, maxSteps, maxCostUsd, effort, log: console.log });
+const result = await runAgent({ mcp, target, provider, model, maxSteps, maxCostUsd, effort, log: console.log });
 await mcp.close();
 
 const runDir = path.resolve(here, "../runs", new Date().toISOString().replace(/[:.]/g, "-"));
@@ -54,11 +65,12 @@ mkdirSync(runDir, { recursive: true });
 const { messages, ...report } = result;
 writeFileSync(
   path.join(runDir, "report.json"),
-  JSON.stringify({ model: MODEL, effort, target, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
+  JSON.stringify({ effort, target, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
 );
 writeFileSync(path.join(runDir, "transcript.json"), JSON.stringify(messages, null, 2));
 
-console.log(`\nStopped: ${result.stoppedBecause} after ${result.steps} steps, $${result.costUsd.toFixed(2)}`);
+console.log(`\n${result.provider} / ${result.model}`);
+console.log(`Stopped: ${result.stoppedBecause} after ${result.steps} steps, $${result.costUsd.toFixed(2)}`);
 console.log(`Bugs filed: ${result.bugs.length}`);
 for (const [i, b] of result.bugs.entries()) {
   console.log(`  ${i + 1}. [${b.category}/${b.severity}] ${b.page}  ${b.title}`);

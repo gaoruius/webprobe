@@ -1,8 +1,8 @@
 // The agent's own tools. The browser tools come from browser-mcp; these two are how the
 // agent hands results back to us, so they run in this process, not in the MCP server.
 
-import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import type { ToolDef } from "./providers/types.js";
 
 export const CATEGORIES = ["functional", "validation", "a11y", "network", "console", "visual", "other"] as const;
 
@@ -20,9 +20,10 @@ export type BugReport = z.infer<typeof BugReport>;
 
 export const Finish = z.object({ summary: z.string() });
 
-// strict: true makes the API guarantee the input matches the schema. We still parse with
-// zod before using it, because the schema is the contract and the check costs nothing.
-export const localTools: Anthropic.Beta.BetaTool[] = [
+// strict: true makes the API guarantee the input matches the schema (Claude supports this;
+// Gemini ignores it). We still parse with zod before using it, because the schema is the
+// contract and the check costs nothing.
+export const localTools: ToolDef[] = [
   {
     name: "report_bug",
     description:
@@ -30,7 +31,7 @@ export const localTools: Anthropic.Beta.BetaTool[] = [
       "right after you confirm it. Evidence must be something a tool returned to you " +
       "(a console message, a failed request, a snapshot line), not a guess.",
     strict: true,
-    input_schema: {
+    schema: {
       type: "object",
       additionalProperties: false,
       required: ["title", "page", "category", "severity", "steps", "expected", "actual", "evidence"],
@@ -50,7 +51,7 @@ export const localTools: Anthropic.Beta.BetaTool[] = [
     name: "finish",
     description: "Call when you have explored the site and filed every bug you found.",
     strict: true,
-    input_schema: {
+    schema: {
       type: "object",
       additionalProperties: false,
       required: ["summary"],
