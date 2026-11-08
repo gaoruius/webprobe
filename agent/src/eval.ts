@@ -1,9 +1,10 @@
 // Score agent runs against BuggyShop's ground truth.
 //
-//   npm run eval -- runs/<a> runs/<b> ...        (BuggyShop ran with every bug on)
-//   npm run eval -- --live none runs/<clean>     (BuggyShop ran with `npm run dev:clean`)
+//   npm run eval -- runs/<a> runs/<b> ...
 //
-// --live takes the same value as NEXT_PUBLIC_BUGS: "all", "none" or a comma list of ids.
+// Each run is scored against the bugs that were live for it, recorded in report.json as
+// liveBugs (same values as NEXT_PUBLIC_BUGS: "all", "none" or a comma list of ids).
+// --live <value> overrides that for every run given.
 //
 // A report finds a bug when it is on the bug's page and the bug's `match` regex hits its
 // title, actual or evidence. Each live bug is found at most once; further reports of it
@@ -79,6 +80,7 @@ export function score(reports: BugReport[], live: TruthBug[]): Score {
 }
 
 type RunReport = {
+  liveBugs?: string;
   provider?: string;
   model?: string;
   bugs: BugReport[];
@@ -96,10 +98,10 @@ const mean = (xs: (number | null)[]) => {
 
 function main(argv: string[]) {
   const here = path.dirname(fileURLToPath(import.meta.url));
-  let live = "all";
+  let override: string | undefined;
   const dirs: string[] = [];
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--live") live = argv[++i] ?? "all";
+    if (argv[i] === "--live") override = argv[++i];
     else dirs.push(argv[i]);
   }
   if (!dirs.length) {
@@ -109,21 +111,22 @@ function main(argv: string[]) {
 
   const manifest = path.resolve(here, "../../buggyshop/bugs.manifest.json");
   const truth = (JSON.parse(readFileSync(manifest, "utf8")) as { bugs: TruthBug[] }).bugs;
-  const bugs = liveBugs(truth, live);
-  console.log(`Live bugs (${live}): ${bugs.map((b) => b.id).join(", ") || "none"}\n`);
 
   const scores: Score[] = [];
   for (const dir of dirs) {
     const run = JSON.parse(readFileSync(path.join(dir, "report.json"), "utf8")) as RunReport;
+    const live = override ?? run.liveBugs ?? "all";
+    const bugs = liveBugs(truth, live);
     const s = score(run.bugs, bugs);
     scores.push(s);
     console.log(
       `${path.basename(path.resolve(dir))}  ${run.provider ?? "?"} / ${run.model ?? "?"}  ` +
         `${run.steps} steps, ${run.stoppedBecause}, $${run.costUsd.toFixed(2)}` +
-        (run.seconds ? `, ${Math.round(run.seconds)}s` : ""),
+        (run.seconds ? `, ${Math.round(run.seconds)}s` : "") +
+        `, live bugs: ${live}`,
     );
     console.log(
-      `  recall ${pct(s.recall)} (${s.found.length}/${bugs.length})   precision ${pct(s.precision)}   ` +
+      `  recall ${pct(s.recall)} (${s.found.length}/${s.live.length})   precision ${pct(s.precision)}   ` +
         `reports ${run.bugs.length}, duplicates ${s.duplicates.length}, false positives ${s.falsePositives.length}`,
     );
     for (const f of s.found) console.log(`    ✓ ${f.id}  ← "${run.bugs[f.report].title}"`);
@@ -141,9 +144,11 @@ function main(argv: string[]) {
         `precision ${pct(mean(scores.map((s) => s.precision)))}, ` +
         `false positives ${(scores.reduce((a, s) => a + s.falsePositives.length, 0) / scores.length).toFixed(1)}/run`,
     );
-    for (const b of bugs) {
-      const n = scores.filter((s) => s.found.some((f) => f.id === b.id)).length;
-      console.log(`  ${b.id.padEnd(24)} found in ${n}/${scores.length} runs`);
+    for (const b of truth) {
+      const live = scores.filter((s) => s.live.includes(b.id));
+      if (!live.length) continue;
+      const n = live.filter((s) => s.found.some((f) => f.id === b.id)).length;
+      console.log(`  ${b.id.padEnd(24)} found in ${n}/${live.length} runs`);
     }
   }
 }

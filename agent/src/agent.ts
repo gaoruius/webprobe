@@ -5,6 +5,8 @@
 // The loop knows nothing about any one model API. Providers (providers/claude.ts,
 // gemini.ts, groq.ts) turn our tool definitions and results into their own format.
 
+import { writeFileSync } from "node:fs";
+import path from "node:path";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { claude } from "./providers/claude.js";
 import { gemini } from "./providers/gemini.js";
@@ -23,8 +25,16 @@ export type AgentOptions = {
   maxSteps: number;
   maxCostUsd: number;
   effort: Effort;
+  // Where to save a screenshot for each filed bug. Leave out to skip screenshots.
+  screenshotDir?: string;
   log?: (line: string) => void;
 };
+
+// Browser tools the harness uses but the model never sees. A screenshot would cost the
+// model far more context than a snapshot, so only we take them, as evidence for reports.
+const HARNESS_ONLY_TOOLS = new Set(["screenshot"]);
+
+export type FiledBug = BugReport & { screenshot?: string };
 
 // After the step budget runs out, the model gets this many extra turns in which only
 // report_bug and finish work. Without it, a model that explores until the last step
@@ -36,7 +46,7 @@ export type ToolCall = { step: number; name: string; input: unknown; isError: bo
 export type AgentResult = {
   provider: ProviderName;
   model: string;
-  bugs: BugReport[];
+  bugs: FiledBug[];
   summary: string;
   stoppedBecause: "finished" | "ended_turn" | "max_steps" | "max_cost" | "refusal" | "max_tokens" | "error";
   error?: string;
@@ -60,7 +70,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
   // MCP tool definitions map almost 1:1 onto model tool definitions.
   const { tools: mcpTools } = await opts.mcp.listTools();
-  const browserTools: ToolDef[] = mcpTools.map((t) => {
+  const browserTools: ToolDef[] = mcpTools.filter((t) => !HARNESS_ONLY_TOOLS.has(t.name)).map((t) => {
     const { $schema, ...schema } = t.inputSchema as Record<string, unknown>;
     return { name: t.name, description: t.description ?? "", schema };
   });
@@ -74,7 +84,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   };
   const model: Provider = PROVIDERS[opts.provider](providerOptions);
 
-  const bugs: BugReport[] = [];
+  const bugs: FiledBug[] = [];
   const toolCalls: ToolCall[] = [];
   const usage: Usage = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
   const cost = () =>
@@ -92,11 +102,29 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let finished = false;
   let error: string | undefined;
 
+  // A screenshot of the page as it is when the bug is filed. Best effort: a report without
+  // one is still a report.
+  async function saveScreenshot(n: number): Promise<string | undefined> {
+    if (!opts.screenshotDir) return undefined;
+    try {
+      const res = await opts.mcp.callTool({ name: "screenshot", arguments: {} });
+      const image = (res.content as { type: string; data?: string }[]).find((c) => c.type === "image");
+      if (res.isError || !image?.data) return undefined;
+      const name = `bug-${n}.png`;
+      writeFileSync(path.join(opts.screenshotDir, name), Buffer.from(image.data, "base64"));
+      return name;
+    } catch {
+      return undefined;
+    }
+  }
+
   async function runTool(use: ToolUse): Promise<ToolResult> {
     if (use.name === "report_bug") {
       const parsed = BugReport.safeParse(use.input);
       if (!parsed.success) return { use, output: `Invalid report: ${parsed.error.message}`, isError: true };
-      bugs.push(parsed.data);
+      const bug: FiledBug = parsed.data;
+      bugs.push(bug);
+      bug.screenshot = await saveScreenshot(bugs.length);
       return { use, output: `Filed bug #${bugs.length}.`, isError: false };
     }
     if (step > opts.maxSteps && use.name !== "finish") {

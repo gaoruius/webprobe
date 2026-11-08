@@ -3,8 +3,9 @@
 //   npm start                              (BuggyShop must be running on localhost:3000)
 //   WEBPROBE_PROVIDER=gemini npm start     (Gemini instead of Claude; also: groq)
 //
-// Writes runs/<timestamp>/report.json (bugs, cost, stop reason, every tool call) and
-// transcript.json (the full message history, for debugging the agent).
+// Writes runs/<timestamp>/report.json (bugs, cost, stop reason, every tool call),
+// transcript.json (the full message history, for debugging the agent) and a bug-<n>.png
+// screenshot for each bug filed. View them with the viewer: cd viewer && npm run dev.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -27,6 +28,10 @@ const provider = (process.env.WEBPROBE_PROVIDER ??
   (Object.keys(KEY_VARS) as ProviderName[]).find(hasKey) ??
   "claude") as ProviderName;
 const model = process.env.WEBPROBE_MODEL || undefined;
+// Which BuggyShop bugs were on for this run, for the eval. Set it to whatever
+// NEXT_PUBLIC_BUGS BuggyShop was started with ("none" for `npm run dev:clean`).
+// The agent never sees it.
+const liveBugs = process.env.WEBPROBE_LIVE_BUGS ?? "all";
 const maxSteps = Number(process.env.WEBPROBE_MAX_STEPS ?? 40);
 const maxCostUsd = Number(process.env.WEBPROBE_MAX_COST_USD ?? 2);
 const effort = (process.env.WEBPROBE_EFFORT ?? "medium") as AgentOptions["effort"];
@@ -64,15 +69,25 @@ await mcp.connect(
 
 console.log(`WebProbe: ${provider}, effort ${effort}, up to ${maxSteps} steps / $${maxCostUsd} on ${target}\n`);
 const started = Date.now();
-const result = await runAgent({ mcp, target, provider, model, maxSteps, maxCostUsd, effort, log: console.log });
+const runDir = path.resolve(here, "../runs", new Date(started).toISOString().replace(/[:.]/g, "-"));
+mkdirSync(runDir, { recursive: true });
+const result = await runAgent({
+  mcp,
+  target,
+  provider,
+  model,
+  maxSteps,
+  maxCostUsd,
+  effort,
+  screenshotDir: runDir,
+  log: console.log,
+});
 await mcp.close();
 
-const runDir = path.resolve(here, "../runs", new Date().toISOString().replace(/[:.]/g, "-"));
-mkdirSync(runDir, { recursive: true });
 const { messages, ...report } = result;
 writeFileSync(
   path.join(runDir, "report.json"),
-  JSON.stringify({ effort, target, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
+  JSON.stringify({ effort, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
 );
 writeFileSync(path.join(runDir, "transcript.json"), JSON.stringify(messages, null, 2));
 

@@ -7,6 +7,8 @@
 //   type(ref, text)        fill an input; optionally press Enter
 //   console_errors()       console errors + uncaught exceptions since the last call
 //   network_errors()       failed / 4xx / 5xx / blocked requests since the last call
+//   screenshot()           PNG of the visible page (the WebProbe agent keeps this one for
+//                          itself: it attaches one to each bug report)
 //
 // Transport is stdio, so stdout belongs to the MCP protocol: log to stderr only.
 
@@ -333,6 +335,22 @@ server.registerTool(
     return text(
       events.length ? `${events.length} new network event(s):\n${events.join("\n")}` : "No new network errors.",
     );
+  },
+);
+
+server.registerTool(
+  "screenshot",
+  {
+    title: "Screenshot",
+    description:
+      "Return a PNG of the visible part of the current page. Prefer `snapshot` for reading " +
+      "the page: an image costs far more context than text.",
+    inputSchema: {},
+  },
+  async () => {
+    if (!page) return NO_PAGE;
+    const png = await page.screenshot({ type: "png", timeout: ACTION_TIMEOUT_MS });
+    return { content: [{ type: "image" as const, data: png.toString("base64"), mimeType: "image/png" }] };
   },
 );
 

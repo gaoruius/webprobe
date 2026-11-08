@@ -3,9 +3,10 @@
 A front-end QA agent that explores a web app in a real browser, finds bugs, and files
 structured bug reports — plus an eval suite that measures how well (and how reliably) it does.
 
-> Status: **week 3.** The test site and the browser tool server work — a scripted run through the
-> MCP tools reproduces all 5 seeded bugs. The agent loop is written and waiting for its first
-> real run; the eval runner comes next.
+> Status: **week 3.** The test site, the browser tool server, the agent loop (Claude, Gemini or
+> open models on Groq), the eval scorer and a run viewer all work. The first runs used free
+> tiers only, which are too small for a full eval (see [First runs](#first-runs)); recall and
+> precision with a strong model come next.
 
 ## Layout
 
@@ -17,10 +18,13 @@ webprobe/
 ├── browser-mcp/          MCP server: the agent's only way to touch the browser
 │   ├── src/server.ts     tools: navigate, snapshot, click, type, console_errors, network_errors
 │   └── src/smoke-test.ts scripted run that reproduces every seeded bug through the tools
-└── agent/                hand-written agent loop (Claude API + MCP client)
-    ├── src/agent.ts      the loop: budgets, stuck detection, append-only history
-    ├── src/tools.ts      report_bug and finish, the agent's own tools
-    └── src/run.ts        one run against BuggyShop → runs/<time>/report.json
+├── agent/                hand-written agent loop (MCP client + model providers)
+│   ├── src/agent.ts      the loop: budgets, stuck detection, wrap-up turns
+│   ├── src/providers/    claude.ts, gemini.ts, groq.ts behind one small interface
+│   ├── src/tools.ts      report_bug and finish, the agent's own tools
+│   ├── src/run.ts        one run against BuggyShop → runs/<time>/report.json + screenshots
+│   └── src/eval.ts       scores runs against the manifest (tests in test/)
+└── viewer/               Next.js app to browse runs: scores, bug reports, step timeline
 ```
 
 ## Run it
@@ -37,9 +41,19 @@ npm run smoke                                      # 16 checks; exits 1 if any f
 ```
 
 ```bash
-# 3. the agent (needs ANTHROPIC_API_KEY in agent/.env)
+# 3. the agent: put one of ANTHROPIC_API_KEY, GEMINI_API_KEY, GROQ_API_KEY in agent/.env
 cd agent && npm install && npm start
-#    budgets: WEBPROBE_MAX_STEPS (40), WEBPROBE_MAX_COST_USD (2), WEBPROBE_EFFORT (medium)
+#    provider: WEBPROBE_PROVIDER=claude|gemini|groq (default: the first one with a key)
+#    model:    WEBPROBE_MODEL (defaults: claude-opus-5-5, gemini-3.8-flash, openai/gpt-oss-120b)
+#    budgets:  WEBPROBE_MAX_STEPS (40), WEBPROBE_MAX_COST_USD (2), WEBPROBE_EFFORT (medium)
+#    against the clean site, tell the eval: WEBPROBE_LIVE_BUGS=none npm start
+
+# 4. score runs
+npm run eval -- runs/<dir> runs/<dir> ...           # recall, precision, false positives
+npm test                                           # tests for the scorer
+
+# 5. browse runs
+cd viewer && npm install && npm run dev            # http://localhost:3001
 ```
 
 If `npx playwright install` can't download Chromium, use your installed Chrome:
@@ -71,6 +85,7 @@ So far it has been exercised by `smoke-test.ts` through the MCP client SDK, not 
 | `type(ref, text, submit?)` | replace a field's value; optionally press Enter |
 | `console_errors()` | console errors/warnings + uncaught exceptions since the last call |
 | `network_errors()` | failed, 4xx/5xx and blocked requests since the last call |
+| `screenshot()` | PNG of the visible page. The agent hides it from the model and takes one itself for each bug filed |
 
 Design choices:
 - **Rules live in the tool server, not the prompt.** Off-site requests are blocked at the
@@ -87,28 +102,64 @@ Design choices:
 
 Written by hand instead of with a framework or the SDK's tool runner, so every decision is visible:
 
+- **Any model.** The loop talks to a small `Provider` interface; `providers/claude.ts`,
+  `gemini.ts` and `groq.ts` own each API's message format. The MCP tools don't change at all.
 - **Two kinds of tools.** Browser tools come from the MCP server (`tools/list` maps almost 1:1
-  onto Claude tool definitions). `report_bug` and `finish` run in the agent process: they are
+  onto model tool definitions). `report_bug` and `finish` run in the agent process: they are
   how results come back, so the bug list is structured data, not prose to parse.
 - **Hard stops.** A step budget and a dollar budget, computed from the API's token usage.
-  Three steps before the end the agent is told to file what it has and finish.
+  Three steps before the end the agent is told to file what it has and finish. After the last
+  step it gets up to five report-only turns (browser tools disabled), so a model that explores
+  to the very end still files what it saw.
 - **Stuck detection.** The same call three times in a row gets a note telling it to change course.
-- **Append-only history.** Earlier turns are never edited or dropped. That keeps the prompt
-  cache valid (the history is re-read at the cache price) and is required for the model's
-  thinking blocks to stay valid.
+- **History: append-only, except where it can't be.** Claude and Gemini get the history
+  exactly as it happened: that keeps the prompt cache valid, and both reject edited history
+  that carries their signed reasoning. Groq's free tier allows ~8K tokens a minute, so the Groq
+  provider masks all but the last two tool results. The cost shows up in the runs: by the time
+  the model writes its reports, the snapshot that showed the bug may already be masked.
+- **Failures keep results.** Dropped connections and per-minute rate limits are retried; a
+  daily quota stops the run at once. A run that fails still writes what it found.
 - **Least privilege.** The MCP server process does not get the API key.
 - **Generic prompt.** The system prompt describes how a QA engineer works, not the seeded bugs.
   Naming them would score well here and teach nothing about other sites.
+
+## Eval
+
+`bugs.manifest.json` gives each seeded bug a `match` regex. A report finds a bug when it is on
+the bug's page and the regex hits its title, actual or evidence; each bug counts once, further
+reports of it are duplicates, anything else is a false positive (on the clean site, every
+report). Keyword matching is crude, so false positives are listed for a human to check rather
+than trusted. The agent never sees the manifest, and BuggyShop exposes no way to read it.
+
+## First runs
+
+Free tiers only, against BuggyShop with all 5 bugs on:
+
+| model | steps | found | what happened |
+|---|---|---|---|
+| gemini-3.8-flash | 17 | 1 (`reviews-tab-typeerror`, step 14) | hit the free tier's 20 requests/day; the report was lost to the crash, which is why runs now save what they have on failure |
+| openai/gpt-oss-120b (Groq) | 40 | 0 | saw the coupon 500 in `console_errors`, never filed it; ignored the 3-steps-left note |
+| openai/gpt-oss-120b (Groq) | 41 | 0 | set a quantity to 0 and saw the item stay at `Total: $28.00`; ended with "no issues found" |
+| qwen/qwen3.8-27b (Groq) | 19 | 0 | one reply needed more than the free tier's 1,000 output tokens a minute |
+
+What they show: the plumbing holds up across three APIs, but the free models that finished a run
+saw bug evidence and did not recognise it as a bug. Numbers worth quoting need a stronger model
+and repeated runs.
 
 ## Roadmap
 
 - [x] BuggyShop with 5 switchable bugs + ground-truth manifest
 - [x] MCP server: `navigate`, `snapshot`, origin allowlist, smoke test
 - [x] tools: `click`, `type`, `console_errors`, `network_errors`; network-level origin blocking
-- [ ] tool: `screenshot` (visual/layout bugs)
+- [x] tool: `screenshot`, attached to every bug report
 - [x] agent loop (hand-written) with step/cost budgets and stuck detection
-- [ ] first real runs; eval runner: recall / precision against the manifest, false positives on the clean build, repeated runs
-- [ ] `BugReport` schema (zod) for structured output
+- [x] `BugReport` schema (zod) for structured output
+- [x] providers: Claude, Gemini, Groq
+- [x] eval scorer (recall, precision, duplicates, false positives) with tests
+- [x] run viewer
+- [x] first runs on free tiers
+- [ ] runs with a strong model: recall / precision, false positives on the clean build, repeated runs
+- [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
 - [ ] eval runner: recall, precision, pass^k, injection resistance, cost per run
 - [ ] tracing (Langfuse) and a trace-replay UI

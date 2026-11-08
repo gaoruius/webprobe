@@ -1,0 +1,185 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Stat, StopBadge, RecallBar } from "@/components/ui";
+import { brief, duration, pageOf, tokens, usd, when } from "@/lib/format";
+import { getRun, truth, type FiledBug, type ToolCall } from "@/lib/runs";
+
+export const dynamic = "force-dynamic";
+
+// Long snapshots would make the page unusable; the full text is in report.json.
+const MAX_OUTPUT = 6000;
+
+export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const run = getRun(id);
+  if (!run) notFound();
+
+  const bugs = truth();
+  const verdict = new Map<number, { kind: "found" | "duplicate"; id: string }>();
+  for (const f of run.score.found) verdict.set(f.report, { kind: "found", id: f.id });
+  for (const d of run.score.duplicates) verdict.set(d.report, { kind: "duplicate", id: d.id });
+
+  const steps = new Map<number, ToolCall[]>();
+  for (const c of run.toolCalls) steps.set(c.step, [...(steps.get(c.step) ?? []), c]);
+
+  return (
+    <>
+      <p className="crumbs">
+        <Link href="/">All runs</Link> / {run.id}
+      </p>
+      <h1 className="run-title">
+        {run.model} <span className="muted">· {when(run.startedAt)}</span>
+      </h1>
+
+      <div className="stats">
+        <Stat label="Stopped" value={<StopBadge reason={run.stoppedBecause} />} />
+        <Stat
+          label="Recall"
+          value={<RecallBar recall={run.score.recall} found={run.score.found.length} live={run.score.live.length} />}
+        />
+        <Stat label="Reports" value={run.bugs.length} />
+        <Stat label="Steps" value={run.steps} />
+        <Stat label="Time" value={duration(run.seconds)} />
+        <Stat label="Cost" value={usd(run.costUsd)} />
+        <Stat label="Tokens in / out" value={`${tokens(run.usage.input + run.usage.cacheRead)} / ${tokens(run.usage.output)}`} />
+      </div>
+
+      {run.error && (
+        <p className="callout callout-bad">
+          <strong>Run failed:</strong> {run.error}
+        </p>
+      )}
+      {run.summary && (
+        <p className="callout">
+          <strong>Agent's summary:</strong> {run.summary}
+        </p>
+      )}
+
+      <section>
+        <h2>Scorecard</h2>
+        {run.score.live.length === 0 ? (
+          <p className="muted">Clean site: no bugs were live, so every report is a false positive.</p>
+        ) : (
+          <ul className="scorecard">
+            {bugs
+              .filter((b) => run.score.live.includes(b.id))
+              .map((b) => {
+                const hit = run.score.found.find((f) => f.id === b.id);
+                return (
+                  <li key={b.id} className={hit ? "hit" : "miss"}>
+                    <span className="mark" aria-label={hit ? "found" : "missed"}>
+                      {hit ? "✓" : "✗"}
+                    </span>
+                    <div>
+                      <div className="score-id">
+                        {b.id} <span className="muted small">{b.category} · {b.page}</span>
+                      </div>
+                      <div className="small">{b.summary}</div>
+                      {hit && (
+                        <a className="small" href={`#bug-${hit.report}`}>
+                          Found by report #{hit.report + 1}
+                        </a>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2>Reports ({run.bugs.length})</h2>
+        {run.bugs.length === 0 && <p className="muted">The agent filed no bugs.</p>}
+        <div className="cards">
+          {run.bugs.map((bug, i) => (
+            <BugCard key={i} runId={run.id} index={i} bug={bug} verdict={verdict.get(i)} />
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2>Timeline</h2>
+        <ol className="timeline">
+          {[...steps.entries()].map(([step, calls]) => (
+            <li key={step}>
+              <span className="step-num">{step}</span>
+              <div className="step-calls">
+                {calls.map((c, j) => (
+                  <details key={j} className={c.isError ? "call call-error" : "call"}>
+                    <summary>
+                      <code className="tool">{c.name}</code> <span className="muted small">{brief(c.input)}</span>
+                      {pageOf(c.output) && <span className="at small">{pageOf(c.output)}</span>}
+                    </summary>
+                    <pre>
+                      {c.output.length > MAX_OUTPUT
+                        ? `${c.output.slice(0, MAX_OUTPUT)}\n… ${c.output.length - MAX_OUTPUT} more characters in report.json`
+                        : c.output}
+                    </pre>
+                  </details>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </>
+  );
+}
+
+function BugCard({
+  runId,
+  index,
+  bug,
+  verdict,
+}: {
+  runId: string;
+  index: number;
+  bug: FiledBug;
+  verdict?: { kind: "found" | "duplicate"; id: string };
+}) {
+  return (
+    <article className="card" id={`bug-${index}`}>
+      <header className="card-head">
+        <span className="muted small">#{index + 1}</span>
+        <span className={`badge sev-${bug.severity}`}>{bug.severity}</span>
+        <span className="badge badge-neutral">{bug.category}</span>
+        <code className="small">{bug.page}</code>
+        <span className="spacer" />
+        {verdict ? (
+          <span className={`badge ${verdict.kind === "found" ? "badge-good" : "badge-neutral"}`}>
+            {verdict.kind === "found" ? "matches" : "duplicate of"} {verdict.id}
+          </span>
+        ) : (
+          <span className="badge badge-bad">no match: check by hand</span>
+        )}
+      </header>
+      <h3>{bug.title}</h3>
+      {bug.screenshot && (
+        // Served from the run folder by app/runs/[id]/files/[name]/route.ts.
+        <a href={`/runs/${runId}/files/${bug.screenshot}`} target="_blank" rel="noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="shot" src={`/runs/${runId}/files/${bug.screenshot}`} alt={`Page when bug #${index + 1} was filed`} />
+        </a>
+      )}
+      <div className="card-grid">
+        <div>
+          <h4>Steps</h4>
+          <ol className="small">
+            {bug.steps.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ol>
+        </div>
+        <div>
+          <h4>Expected</h4>
+          <p className="small">{bug.expected}</p>
+          <h4>Actual</h4>
+          <p className="small">{bug.actual}</p>
+        </div>
+      </div>
+      <h4>Evidence</h4>
+      <pre>{bug.evidence}</pre>
+    </article>
+  );
+}
