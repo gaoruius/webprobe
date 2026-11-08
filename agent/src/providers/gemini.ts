@@ -102,14 +102,15 @@ export function gemini(opts: ProviderOptions): Provider {
 }
 
 // The SDK retries HTTP errors like 429 and 503, but not a request that never got a response
-// (connection refused or reset). Retry those too, with a growing pause.
-async function withNetworkRetry<T>(call: () => Promise<T>, attempts = 5): Promise<T> {
+// (connection refused or reset). Retry those too, backing off up to a minute, which rides
+// out a network outage of a few minutes.
+async function withNetworkRetry<T>(call: () => Promise<T>, attempts = 8): Promise<T> {
   for (let i = 1; ; i++) {
     try {
       return await call();
     } catch (err) {
       if (i >= attempts || !(err instanceof TypeError && err.message === "fetch failed")) throw err;
-      await new Promise((r) => setTimeout(r, 5000 * i));
+      await new Promise((r) => setTimeout(r, Math.min(5000 * 2 ** (i - 1), 60_000)));
     }
   }
 }
