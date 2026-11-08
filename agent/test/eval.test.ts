@@ -1,11 +1,11 @@
 // The scorer decides the numbers we publish, so it gets its own tests. The truth comes from
-// the real manifest; the reports are made up, except the first, which is the report a
-// Gemini run actually filed.
+// the real manifest. Most reports are made up; `reviews` and the /product/[id] report are
+// ones Gemini runs actually filed.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { liveBugs, normalizePage, score, type TruthBug } from "../src/eval.js";
+import { liveBugs, normalizePage, pageMatches, score, type TruthBug } from "../src/eval.js";
 import type { BugReport } from "../src/tools.js";
 
 const truth = (
@@ -48,6 +48,31 @@ test("normalizePage strips origin and trailing slash", () => {
   assert.equal(normalizePage("http://localhost:3000/cart/"), "/cart");
   assert.equal(normalizePage("/"), "/");
   assert.equal(normalizePage("/product/mug?tab=1"), "/product/mug");
+});
+
+test("pageMatches: * and route parameters match one segment", () => {
+  assert.ok(pageMatches("/product/notebook", "/product/*"));
+  assert.ok(pageMatches("/product/[id]", "/product/*"));
+  assert.ok(pageMatches("/product/:slug", "/product/mug"));
+  assert.ok(!pageMatches("/product", "/product/*"));
+  assert.ok(!pageMatches("/cart", "/product/*"));
+});
+
+// Filed by a gemini-3.5-flash-lite run: the bug is in a component every product page uses.
+test("a bug on every product page is found from any of them", () => {
+  const s = score(
+    [
+      report({
+        title: "Clicking Reviews tab on product page throws TypeError",
+        page: "/product/[id]",
+        category: "functional",
+        evidence: "uncaught exception: TypeError: Cannot read properties of undefined (reading 'length')",
+      }),
+    ],
+    liveBugs(truth, "all"),
+  );
+  assert.deepEqual(s.found.map((f) => f.id), ["reviews-tab-typeerror"]);
+  assert.equal(s.falsePositives.length, 0);
 });
 
 test("matches reports to the right bug, even two on one page", () => {

@@ -6,7 +6,8 @@
 // liveBugs (same values as NEXT_PUBLIC_BUGS: "all", "none" or a comma list of ids).
 // --live <value> overrides that for every run given.
 //
-// A report finds a bug when it is on the bug's page and the bug's `match` regex hits its
+// A report finds a bug when it is on the bug's page (a `*` segment in the manifest, or a
+// route parameter like [id] in the report, matches any one segment) and the bug's `match` regex hits its
 // title, actual or evidence. Each live bug is found at most once; further reports of it
 // are duplicates. Any other report is a false positive: on the clean site, that is every
 // report. Keyword matching is crude, so false positives are printed for a human to check.
@@ -38,6 +39,16 @@ export function normalizePage(page: string): string {
   return p.length > 1 ? p.replace(/\/+$/, "") : p;
 }
 
+// A path segment that stands for any value: "*" in the manifest, or a route parameter
+// such as "[id]" or ":id", which is how agents often write "every product page".
+const WILDCARD = /^(\*|\[[^\]]+\]|:.+)$/;
+
+export function pageMatches(reported: string, truth: string): boolean {
+  const a = normalizePage(reported).split("/");
+  const b = normalizePage(truth).split("/");
+  return a.length === b.length && a.every((seg, i) => seg === b[i] || WILDCARD.test(seg) || WILDCARD.test(b[i]));
+}
+
 export function liveBugs(truth: TruthBug[], live: string): TruthBug[] {
   if (live === "all") return truth;
   if (live === "none") return [];
@@ -53,7 +64,7 @@ export function score(reports: BugReport[], live: TruthBug[]): Score {
   reports.forEach((r, i) => {
     const text = `${r.title}\n${r.actual}\n${r.evidence}`;
     const candidates = live.filter(
-      (b) => normalizePage(r.page) === normalizePage(b.page) && new RegExp(b.match, "i").test(text),
+      (b) => pageMatches(r.page, b.page) && new RegExp(b.match, "i").test(text),
     );
     // Two bugs on one page can both match; prefer the one whose category the agent named,
     // then one not found yet.

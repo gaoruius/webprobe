@@ -1,5 +1,5 @@
 {
-  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file. `match` is a case-insensitive regex the eval runs over a report's title, actual and evidence; a report counts as finding a bug when its page is the bug's page and `match` hits.",
+  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file. `match` is a case-insensitive regex the eval runs over a report's title, actual and evidence; a report counts as finding a bug when its page is the bug's page (`*` matches any one path segment) and `match` hits.",
   "bugs": [
     {
       "id": "cart-zero-qty",
@@ -45,10 +45,10 @@
       "id": "reviews-tab-typeerror",
       "category": "console",
       "severity": "major",
-      "page": "/product/mug",
+      "page": "/product/*",
       "summary": "Clicking the Reviews tab throws a TypeError in the console and the tab does not open.",
       "expected": "Reviews tab opens and lists the reviews.",
-      "how_to_trigger": "Open /product/mug and click 'Reviews (2)'.",
+      "how_to_trigger": "Open any product page (e.g. /product/mug) and click 'Reviews (2)'.",
       "match": "review|typeerror"
     }
   ]

@@ -73,7 +73,7 @@ So far it has been exercised by `smoke-test.ts` through the MCP client SDK, not 
 | `signup-email-validation` | validation | /signup | accepts `not-an-email` |
 | `product-img-alt` | a11y | / | product images have no alt text |
 | `coupon-500-silent` | network | /cart | coupon API returns 500, page shows nothing |
-| `reviews-tab-typeerror` | console | /product/mug | Reviews tab throws TypeError, never opens |
+| `reviews-tab-typeerror` | console | /product/* | Reviews tab throws TypeError, never opens |
 
 ## Browser MCP server
 
@@ -126,7 +126,7 @@ Written by hand instead of with a framework or the SDK's tool runner, so every d
 ## Eval
 
 `bugs.manifest.json` gives each seeded bug a `match` regex. A report finds a bug when it is on
-the bug's page and the regex hits its title, actual or evidence; each bug counts once, further
+the bug's page (`*` and route parameters match any one segment) and the regex hits its title, actual or evidence; each bug counts once, further
 reports of it are duplicates, anything else is a false positive (on the clean site, every
 report). Keyword matching is crude, so false positives are listed for a human to check rather
 than trusted. The agent never sees the manifest, and BuggyShop exposes no way to read it.
@@ -141,6 +141,11 @@ Free tiers only, against BuggyShop with all 5 bugs on:
 | openai/gpt-oss-120b (Groq) | 40 | 0 | saw the coupon 500 in `console_errors`, never filed it; ignored the 3-steps-left note |
 | openai/gpt-oss-120b (Groq) | 41 | 0 | set a quantity to 0 and saw the item stay at `Total: $28.00`; ended with "no issues found" |
 | qwen/qwen3.8-27b (Groq) | 19 | 0 | one reply needed more than the free tier's 1,000 output tokens a minute |
+| gemini-3.5-flash-lite (15-step budget to fit the daily quota) | 16 | 1 (`reviews-tab-typeerror`), 0 false positives | finished on its own in 17 s; reported the bug on /product/notebook as `/product/[id]` |
+
+The lite run also caught a bug in the ground truth: the manifest pinned the reviews bug to
+/product/mug, but it lives in a component every product page uses. Manifest pages now take
+`*` segments, and a report's route parameters (`[id]`, `:id`) match any segment.
 
 What they show: the plumbing holds up across three APIs, but the free models that finished a run
 saw bug evidence and did not recognise it as a bug. Numbers worth quoting need a stronger model
