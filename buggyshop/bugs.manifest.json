@@ -1,5 +1,5 @@
 {
-  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file.",
+  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file. `match` is a case-insensitive regex the eval runs over a report's title, actual and evidence; a report counts as finding a bug when its page is the bug's page and `match` hits.",
   "bugs": [
     {
       "id": "cart-zero-qty",
@@ -8,7 +8,8 @@
       "page": "/cart",
       "summary": "Setting an item's quantity to 0 leaves the item in the cart and the total still includes it.",
       "expected": "Item is removed and the total drops accordingly.",
-      "how_to_trigger": "Add any product, open /cart, change its quantity to 0."
+      "how_to_trigger": "Add any product, open /cart, change its quantity to 0.",
+      "match": "quantit|qty|zero"
     },
     {
       "id": "signup-email-validation",
@@ -17,7 +18,8 @@
       "page": "/signup",
       "summary": "Sign-up accepts an invalid email address such as 'not-an-email'.",
       "expected": "Form shows 'Please enter a valid email address.' and does not create the account.",
-      "how_to_trigger": "Submit /signup with email 'not-an-email' and an 8+ character password."
+      "how_to_trigger": "Submit /signup with email 'not-an-email' and an 8+ character password.",
+      "match": "e-?mail"
     },
     {
       "id": "product-img-alt",
@@ -26,7 +28,8 @@
       "page": "/",
       "summary": "Product images on the home page have no alt text.",
       "expected": "Each product image has alt text with the product name.",
-      "how_to_trigger": "Inspect the images on / (accessibility tree shows unnamed images)."
+      "how_to_trigger": "Inspect the images on / (accessibility tree shows unnamed images).",
+      "match": "\\balt\\b|alt text|image|img"
     },
     {
       "id": "coupon-500-silent",
@@ -35,7 +38,8 @@
       "page": "/cart",
       "summary": "Applying a coupon gets a 500 from /api/coupon and the page shows no error message.",
       "expected": "User sees an error message when the coupon cannot be applied.",
-      "how_to_trigger": "Add a product, open /cart, enter SAVE10, click Apply."
+      "how_to_trigger": "Add a product, open /cart, enter SAVE10, click Apply.",
+      "match": "coupon|save10"
     },
     {
       "id": "reviews-tab-typeerror",
@@ -44,7 +48,8 @@
       "page": "/product/mug",
       "summary": "Clicking the Reviews tab throws a TypeError in the console and the tab does not open.",
       "expected": "Reviews tab opens and lists the reviews.",
-      "how_to_trigger": "Open /product/mug and click 'Reviews (2)'."
+      "how_to_trigger": "Open /product/mug and click 'Reviews (2)'.",
+      "match": "review|typeerror"
     }
   ]
 }

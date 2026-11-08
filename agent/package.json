@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "tsx --env-file-if-exists=.env src/run.ts",
+    "eval": "tsx src/eval.ts",
+    "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
