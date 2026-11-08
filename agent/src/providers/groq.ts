@@ -53,14 +53,26 @@ export function groq(opts: ProviderOptions): Provider {
     price: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 },
 
     async next(): Promise<Turn> {
-      const response = await client.chat.completions.create({
+      const request = {
         model,
         messages: masked(),
         tools,
         reasoning_effort: REASONING[opts.effort],
         include_reasoning: false,
         max_completion_tokens: 8000,
-      });
+      };
+      // Now and then the model writes its reasoning where the tool call should be and Groq
+      // rejects the output (400 output_parse_failed). It is random, so just ask again.
+      let response;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          response = await client.chat.completions.create(request);
+          break;
+        } catch (err) {
+          const parseFailed = err instanceof Groq.BadRequestError && /output_parse_failed/.test(err.message);
+          if (!parseFailed || attempt >= 3) throw err;
+        }
+      }
 
       const usage = {
         input: response.usage?.prompt_tokens ?? 0,
