@@ -32,7 +32,8 @@ export type AgentResult = {
   model: string;
   bugs: BugReport[];
   summary: string;
-  stoppedBecause: "finished" | "ended_turn" | "max_steps" | "max_cost" | "refusal" | "max_tokens";
+  stoppedBecause: "finished" | "ended_turn" | "max_steps" | "max_cost" | "refusal" | "max_tokens" | "error";
+  error?: string;
   steps: number;
   usage: Usage;
   costUsd: number;
@@ -83,6 +84,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let repeats = 0;
   let step = 0;
   let finished = false;
+  let error: string | undefined;
 
   async function runTool(use: ToolUse): Promise<ToolResult> {
     if (use.name === "report_bug") {
@@ -113,7 +115,15 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     }
     step++;
 
-    const turn = await model.next();
+    // A failed model call ends the run but keeps what it found so far.
+    let turn;
+    try {
+      turn = await model.next();
+    } catch (err) {
+      stoppedBecause = "error";
+      error = err instanceof Error ? err.message : String(err);
+      break;
+    }
     for (const k of Object.keys(usage) as (keyof Usage)[]) usage[k] += turn.usage[k];
     for (const text of turn.text) log(`  ${text}`);
 
@@ -155,6 +165,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     bugs,
     summary,
     stoppedBecause,
+    error,
     steps: step,
     usage,
     costUsd: cost(),

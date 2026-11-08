@@ -71,6 +71,7 @@ writeFileSync(path.join(runDir, "transcript.json"), JSON.stringify(messages, nul
 
 console.log(`\n${result.provider} / ${result.model}`);
 console.log(`Stopped: ${result.stoppedBecause} after ${result.steps} steps, $${result.costUsd.toFixed(2)}`);
+if (result.error) console.log(`Error: ${result.error}`);
 console.log(`Bugs filed: ${result.bugs.length}`);
 for (const [i, b] of result.bugs.entries()) {
   console.log(`  ${i + 1}. [${b.category}/${b.severity}] ${b.page}  ${b.title}`);
