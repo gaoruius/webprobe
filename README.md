@@ -5,8 +5,8 @@ structured bug reports — plus an eval suite that measures how well (and how re
 
 > Status: **week 3.** The test site, the browser tool server, the agent loop (Claude, Gemini or
 > open models on Groq), the eval scorer and a run viewer all work. Claude Haiku 5.5 finds 73% of
-> the seeded bugs with no false positives, for about a cent a run ([Results](#results)).
-> Clean-site runs and larger models come next.
+> the seeded bugs for about a cent a run, with one false positive in two runs on the clean site,
+> and found three real bugs nobody seeded ([Results](#results)). Larger models come next.
 
 ## Layout
 
@@ -129,7 +129,8 @@ Written by hand instead of with a framework or the SDK's tool runner, so every d
 the bug's page (`*` and route parameters match any one segment) and the regex hits its title, actual or evidence; each bug counts once, further
 reports of it are duplicates. A report of a real defect that was *not* seeded, once a person
 has confirmed it in the code, goes in the manifest's `extras`: it counts as correct for
-precision and stays out of recall. Anything else is a false positive (on the clean site, every
+precision and stays out of recall. Extras match on a report's page and title only, because
+evidence often shows other problems on the same page. Anything else is a false positive (on the clean site, every
 report but extras). Keyword matching is crude, so false positives are listed for a human to
 check rather than trusted. The agent never sees the manifest, and BuggyShop exposes no way to read it.
 
@@ -145,6 +146,11 @@ Claude Haiku 5.5, 40-step budget, BuggyShop with all 5 bugs on, 3 runs:
 | found 1 run in 3 | `signup-email-validation`, `product-img-alt` |
 | extra finds | 2 real bugs that were not seeded: the cart accepts fractional quantities (2.5 mugs) and has no maximum |
 | cost / time | about **$0.01** and **1 minute** per run; ~94% of input tokens were cache reads |
+
+On the clean site (every seeded bug off), 2 runs: **5 reports, 1 false positive** (an empty
+coupon code gets "not valid" and a server round trip, which is arguably fine). The other 4 were
+real defects that were not seeded, including a third one found only here: after a valid coupon,
+an invalid one shows an error but leaves the old discount in the total.
 
 Two things the runs showed:
 - **Agents overstate their coverage.** One run's summary says it tested an invalid email; its
@@ -187,7 +193,8 @@ evidence and did not recognise it as a bug.
 - [x] run viewer
 - [x] first runs on free tiers
 - [x] repeated runs with Claude Haiku 5.5: recall 73%, precision 100%
-- [ ] false-positive runs on the clean build; Sonnet and Opus for comparison
+- [x] false-positive runs on the clean build: 1 false positive in 2 runs
+- [ ] Sonnet and Opus for comparison
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
 - [ ] eval runner: recall, precision, pass^k, injection resistance, cost per run

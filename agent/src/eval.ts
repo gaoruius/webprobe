@@ -10,8 +10,8 @@
 // route parameter like [id] in the report, matches any one segment) and the bug's `match` regex hits its
 // title, actual or evidence. Each live bug is found at most once; further reports of it
 // are duplicates. A report that matches none of them but matches one of the manifest's
-// `extras` (real defects that were not seeded, confirmed by a person) is an extra find:
-// correct for precision, outside recall. Anything else is a false positive: on the clean
+// `extras` (real defects that were not seeded, confirmed by a person) on its page and
+// title is an extra find: correct for precision, outside recall. Anything else is a false positive: on the clean
 // site, that is every report but extras. Keyword matching is crude, so false positives are
 // printed for a human to check; a confirmed one belongs in `extras`.
 
@@ -81,12 +81,11 @@ export function score(reports: BugReport[], live: TruthBug[], extraBugs: ExtraBu
         Number(found.some((f) => f.id === a.id)) - Number(found.some((f) => f.id === b.id)),
     );
     const bug = candidates[0];
-    // Evidence often shows other problems on the same page, so an extra whose pattern hits
-    // the title wins over one that only hits the actual or evidence text.
+    // Extras match on the title only: evidence often shows other problems on the same page
+    // (a discounted price looks like a fractional quantity).
     const extra = bug
       ? undefined
-      : (extraBugs.find((b) => hits(r, b) && new RegExp(b.match, "i").test(r.title)) ??
-        extraBugs.find((b) => hits(r, b)));
+      : extraBugs.find((b) => pageMatches(r.page, b.page) && new RegExp(b.match, "i").test(r.title));
     if (extra) extras.push({ id: extra.id, report: i });
     else if (!bug) falsePositives.push(i);
     else if (found.some((f) => f.id === bug.id)) duplicates.push({ id: bug.id, report: i });

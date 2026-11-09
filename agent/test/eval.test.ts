@@ -103,6 +103,22 @@ test("a confirmed unseeded bug is an extra find: counts for precision, not recal
   assert.equal(s.recall, 1 / 5);
 });
 
+// Filed by a Haiku run on the clean site; its evidence has a discounted price ($87.75).
+test("extras match on the title, not on numbers in the evidence", () => {
+  const s = score(
+    [
+      report({
+        title: "Invalid coupon leaves previously applied discount in the total",
+        page: "/cart",
+        evidence: "heading 'Total: $87.75' (subtotal is $97.50)",
+      }),
+    ],
+    [],
+    extras,
+  );
+  assert.deepEqual(s.extras, [{ id: "coupon-invalid-keeps-discount", report: 0 }]);
+});
+
 test("a second report of the same bug is a duplicate, not a new find", () => {
   const s = score([reviews, { ...reviews, title: "Reviews tab does not open" }], liveBugs(truth, "all"));
   assert.equal(s.found.length, 1);

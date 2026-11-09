@@ -52,12 +52,12 @@
       "match": "review|typeerror"
     }
   ],
-  "extras_description": "Real defects that were not seeded: an agent reported them and a person confirmed them in the code. A report that matches one counts as correct for precision; they are not part of recall, which is about the seeded bugs.",
+  "extras_description": "Real defects that were not seeded: an agent reported them and a person confirmed them in the code. Matched on a report's page and title only, since evidence often shows other problems on the same page. A matching report counts as correct for precision; extras are not part of recall, which is about the seeded bugs.",
   "extras": [
     {
       "id": "cart-fractional-qty",
       "page": "/cart",
-      "match": "fraction|decimal|non-integer|whole number|\\b\\d+\\.(?!00\\b)\\d+\\b",
+      "match": "fraction|decimal|non-integer|whole number",
       "summary": "Cart accepts fractional quantities such as 2.5.",
       "confirmed": "CartProvider.setQuantity accepts any positive number; it never rounds or rejects non-integers.",
       "first_reported": "claude-haiku-5-5, 2026-11-09"
@@ -69,6 +69,14 @@
       "summary": "Cart quantity has no upper limit.",
       "confirmed": "CartProvider.setQuantity has no maximum.",
       "first_reported": "claude-haiku-5-5, 2026-11-09"
+    },
+    {
+      "id": "coupon-invalid-keeps-discount",
+      "page": "/cart",
+      "match": "coupon.*(discount|total)|(discount|total).*coupon",
+      "summary": "After a valid coupon, applying an invalid one shows an error but keeps the old discount in the total.",
+      "confirmed": "cart/page.tsx applyCoupon returns on !res.ok without resetting discount.",
+      "first_reported": "claude-haiku-5-5 on the clean site, 2026-11-09"
     }
   ]
 }
