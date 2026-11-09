@@ -5,7 +5,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { liveBugs, score, type Score, type TruthBug } from "../../agent/src/eval";
+import { liveBugs, score, type ExtraBug, type Score, type TruthBug } from "../../agent/src/eval";
 import type { BugReport } from "../../agent/src/tools";
 
 export const RUNS_DIR = process.env.WEBPROBE_RUNS ?? path.resolve(process.cwd(), "../agent/runs");
@@ -35,8 +35,17 @@ export type Run = {
   score: Score;
 };
 
+type Manifest = { bugs: TruthBug[]; extras?: ExtraBug[] };
+
+const manifest = (): Manifest => JSON.parse(readFileSync(MANIFEST, "utf8"));
+
 export function truth(): TruthBug[] {
-  return (JSON.parse(readFileSync(MANIFEST, "utf8")) as { bugs: TruthBug[] }).bugs;
+  return manifest().bugs;
+}
+
+// Real defects that were not seeded, confirmed by a person (see bugs.manifest.json).
+export function extras(): ExtraBug[] {
+  return manifest().extras ?? [];
 }
 
 // Run folders are named by start time with ':' and '.' replaced: 2026-11-08T06-16-38-934Z.
@@ -46,7 +55,7 @@ function startedAt(id: string): Date {
 
 const ID = /^[\w-]+$/;
 
-export function getRun(id: string, bugs = truth()): Run | null {
+export function getRun(id: string, bugs = truth(), extraBugs = extras()): Run | null {
   if (!ID.test(id)) return null;
   const file = path.join(RUNS_DIR, id, "report.json");
   if (!existsSync(file)) return null;
@@ -61,16 +70,17 @@ export function getRun(id: string, bugs = truth()): Run | null {
     liveBugs: live,
     summary: raw.summary ?? "",
     toolCalls: raw.toolCalls ?? [],
-    score: score(raw.bugs ?? [], liveBugs(bugs, live)),
+    score: score(raw.bugs ?? [], liveBugs(bugs, live), extraBugs),
   };
 }
 
 export function listRuns(): Run[] {
   if (!existsSync(RUNS_DIR)) return [];
   const bugs = truth();
+  const extraBugs = extras();
   return readdirSync(RUNS_DIR)
     .filter((id) => ID.test(id))
-    .map((id) => getRun(id, bugs))
+    .map((id) => getRun(id, bugs, extraBugs))
     .filter((r): r is Run => r !== null)
     .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
 }

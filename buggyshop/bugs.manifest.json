@@ -9,7 +9,7 @@
       "summary": "Setting an item's quantity to 0 leaves the item in the cart and the total still includes it.",
       "expected": "Item is removed and the total drops accordingly.",
       "how_to_trigger": "Add any product, open /cart, change its quantity to 0.",
-      "match": "quantit|qty|zero"
+      "match": "\\b(0|zero)\\b"
     },
     {
       "id": "signup-email-validation",
@@ -50,6 +50,25 @@
       "expected": "Reviews tab opens and lists the reviews.",
       "how_to_trigger": "Open any product page (e.g. /product/mug) and click 'Reviews (2)'.",
       "match": "review|typeerror"
+    }
+  ],
+  "extras_description": "Real defects that were not seeded: an agent reported them and a person confirmed them in the code. A report that matches one counts as correct for precision; they are not part of recall, which is about the seeded bugs.",
+  "extras": [
+    {
+      "id": "cart-fractional-qty",
+      "page": "/cart",
+      "match": "fraction|decimal|non-integer|whole number|\\b\\d+\\.(?!00\\b)\\d+\\b",
+      "summary": "Cart accepts fractional quantities such as 2.5.",
+      "confirmed": "CartProvider.setQuantity accepts any positive number; it never rounds or rejects non-integers.",
+      "first_reported": "claude-haiku-5-5, 2026-11-09"
+    },
+    {
+      "id": "cart-no-max-qty",
+      "page": "/cart",
+      "match": "upper bound|no (max|limit)|maximum|absurd|huge|very large|\\b\\d{6,}\\b",
+      "summary": "Cart quantity has no upper limit.",
+      "confirmed": "CartProvider.setQuantity has no maximum.",
+      "first_reported": "claude-haiku-5-5, 2026-11-09"
     }
   ]
 }

@@ -15,9 +15,10 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   if (!run) notFound();
 
   const bugs = truth();
-  const verdict = new Map<number, { kind: "found" | "duplicate"; id: string }>();
+  const verdict = new Map<number, Verdict>();
   for (const f of run.score.found) verdict.set(f.report, { kind: "found", id: f.id });
   for (const d of run.score.duplicates) verdict.set(d.report, { kind: "duplicate", id: d.id });
+  for (const e of run.score.extras) verdict.set(e.report, { kind: "extra", id: e.id });
 
   const steps = new Map<number, ToolCall[]>();
   for (const c of run.toolCalls) steps.set(c.step, [...(steps.get(c.step) ?? []), c]);
@@ -127,6 +128,14 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   );
 }
 
+type Verdict = { kind: "found" | "duplicate" | "extra"; id: string };
+
+const VERDICT_LABEL: Record<Verdict["kind"], string> = {
+  found: "matches",
+  duplicate: "duplicate of",
+  extra: "real, not seeded:",
+};
+
 function BugCard({
   runId,
   index,
@@ -136,7 +145,7 @@ function BugCard({
   runId: string;
   index: number;
   bug: FiledBug;
-  verdict?: { kind: "found" | "duplicate"; id: string };
+  verdict?: Verdict;
 }) {
   return (
     <article className="card" id={`bug-${index}`}>
@@ -147,8 +156,8 @@ function BugCard({
         <code className="small">{bug.page}</code>
         <span className="spacer" />
         {verdict ? (
-          <span className={`badge ${verdict.kind === "found" ? "badge-good" : "badge-neutral"}`}>
-            {verdict.kind === "found" ? "matches" : "duplicate of"} {verdict.id}
+          <span className={`badge ${verdict.kind === "duplicate" ? "badge-neutral" : "badge-good"}`}>
+            {VERDICT_LABEL[verdict.kind]} {verdict.id}
           </span>
         ) : (
           <span className="badge badge-bad">no match: check by hand</span>

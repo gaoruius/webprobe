@@ -4,9 +4,9 @@ A front-end QA agent that explores a web app in a real browser, finds bugs, and 
 structured bug reports — plus an eval suite that measures how well (and how reliably) it does.
 
 > Status: **week 3.** The test site, the browser tool server, the agent loop (Claude, Gemini or
-> open models on Groq), the eval scorer and a run viewer all work. The first runs used free
-> tiers only, which are too small for a full eval (see [First runs](#first-runs)); recall and
-> precision with a strong model come next.
+> open models on Groq), the eval scorer and a run viewer all work. Claude Haiku 5.5 finds 73% of
+> the seeded bugs with no false positives, for about a cent a run ([Results](#results)).
+> Clean-site runs and larger models come next.
 
 ## Layout
 
@@ -127,13 +127,37 @@ Written by hand instead of with a framework or the SDK's tool runner, so every d
 
 `bugs.manifest.json` gives each seeded bug a `match` regex. A report finds a bug when it is on
 the bug's page (`*` and route parameters match any one segment) and the regex hits its title, actual or evidence; each bug counts once, further
-reports of it are duplicates, anything else is a false positive (on the clean site, every
-report). Keyword matching is crude, so false positives are listed for a human to check rather
-than trusted. The agent never sees the manifest, and BuggyShop exposes no way to read it.
+reports of it are duplicates. A report of a real defect that was *not* seeded, once a person
+has confirmed it in the code, goes in the manifest's `extras`: it counts as correct for
+precision and stays out of recall. Anything else is a false positive (on the clean site, every
+report but extras). Keyword matching is crude, so false positives are listed for a human to
+check rather than trusted. The agent never sees the manifest, and BuggyShop exposes no way to read it.
 
-## First runs
+## Results
 
-Free tiers only, against BuggyShop with all 5 bugs on:
+Claude Haiku 5.5, 40-step budget, BuggyShop with all 5 bugs on, 3 runs:
+
+| | |
+|---|---|
+| recall | **73%** mean (80%, 60%, 80%) |
+| precision | **100%**, 0 false positives |
+| found every run | `cart-zero-qty`, `coupon-500-silent`, `reviews-tab-typeerror` |
+| found 1 run in 3 | `signup-email-validation`, `product-img-alt` |
+| extra finds | 2 real bugs that were not seeded: the cart accepts fractional quantities (2.5 mugs) and has no maximum |
+| cost / time | about **$0.01** and **1 minute** per run; ~94% of input tokens were cache reads |
+
+Two things the runs showed:
+- **Agents overstate their coverage.** One run's summary says it tested an invalid email; its
+  tool calls show it never typed one, and that run missed the signup bug. The eval reads tool
+  calls and reports, never the summary.
+- **The eval needs checking too.** The first scoring pass credited "accepts 2.5 mugs" as the
+  zero-quantity bug (the pattern only asked for "quantity"), and an earlier one called a correct
+  report a false positive because the manifest pinned a bug to one product page when it is on
+  all of them. Both were fixed in the manifest, with a test for each.
+
+### First runs on free tiers
+
+Against BuggyShop with all 5 bugs on:
 
 | model | steps | found | what happened |
 |---|---|---|---|
@@ -147,9 +171,8 @@ The lite run also caught a bug in the ground truth: the manifest pinned the revi
 /product/mug, but it lives in a component every product page uses. Manifest pages now take
 `*` segments, and a report's route parameters (`[id]`, `:id`) match any segment.
 
-What they show: the plumbing holds up across three APIs, but the free models that finished a run
-saw bug evidence and did not recognise it as a bug. Numbers worth quoting need a stronger model
-and repeated runs.
+What they show: the plumbing holds up across three APIs, but the open models on Groq saw bug
+evidence and did not recognise it as a bug.
 
 ## Roadmap
 
@@ -163,7 +186,8 @@ and repeated runs.
 - [x] eval scorer (recall, precision, duplicates, false positives) with tests
 - [x] run viewer
 - [x] first runs on free tiers
-- [ ] runs with a strong model: recall / precision, false positives on the clean build, repeated runs
+- [x] repeated runs with Claude Haiku 5.5: recall 73%, precision 100%
+- [ ] false-positive runs on the clean build; Sonnet and Opus for comparison
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
 - [ ] eval runner: recall, precision, pass^k, injection resistance, cost per run

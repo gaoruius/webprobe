@@ -5,14 +5,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { liveBugs, normalizePage, pageMatches, score, type TruthBug } from "../src/eval.js";
+import { liveBugs, normalizePage, pageMatches, score, type ExtraBug, type TruthBug } from "../src/eval.js";
 import type { BugReport } from "../src/tools.js";
 
-const truth = (
-  JSON.parse(readFileSync(new URL("../../buggyshop/bugs.manifest.json", import.meta.url), "utf8")) as {
-    bugs: TruthBug[];
-  }
-).bugs;
+const { bugs: truth, extras } = JSON.parse(
+  readFileSync(new URL("../../buggyshop/bugs.manifest.json", import.meta.url), "utf8"),
+) as { bugs: TruthBug[]; extras: ExtraBug[] };
 
 const report = (r: Partial<BugReport>): BugReport => ({
   title: "",
@@ -81,6 +79,28 @@ test("matches reports to the right bug, even two on one page", () => {
   assert.deepEqual(s.missed.sort(), ["product-img-alt", "signup-email-validation"]);
   assert.equal(s.recall, 3 / 5);
   assert.equal(s.precision, 1);
+});
+
+// Filed by a Haiku run: a real problem, but not the seeded zero-quantity bug.
+const fractional = report({
+  title: "Cart accepts fractional quantities (e.g. 2.5) and shows them in the header count",
+  page: "/cart",
+  category: "validation",
+  actual: "Quantity 2.5 accepted; header shows Cart (2.5)",
+});
+
+test("another quantity bug on /cart is not the zero-quantity bug", () => {
+  const s = score([fractional], liveBugs(truth, "all"));
+  assert.equal(s.found.length, 0);
+  assert.deepEqual(s.falsePositives, [0]);
+});
+
+test("a confirmed unseeded bug is an extra find: counts for precision, not recall", () => {
+  const s = score([zeroQty, fractional], liveBugs(truth, "all"), extras);
+  assert.deepEqual(s.extras, [{ id: "cart-fractional-qty", report: 1 }]);
+  assert.equal(s.falsePositives.length, 0);
+  assert.equal(s.precision, 1);
+  assert.equal(s.recall, 1 / 5);
 });
 
 test("a second report of the same bug is a duplicate, not a new find", () => {
