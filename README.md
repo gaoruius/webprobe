@@ -4,9 +4,10 @@ A front-end QA agent that explores a web app in a real browser, finds bugs, and 
 structured bug reports — plus an eval suite that measures how well (and how reliably) it does.
 
 > Status: **week 3.** The test site, the browser tool server, the agent loop (Claude, Gemini or
-> open models on Groq), the eval scorer and a run viewer all work. Claude Haiku 5.5 finds 73% of
-> the seeded bugs for about a cent a run, with one false positive in two runs on the clean site,
-> and found three real bugs nobody seeded ([Results](#results)). Larger models come next.
+> open models on Groq), the eval scorer and a run viewer all work. Claude Opus 5.5 found all 5
+> seeded bugs in each of 3 runs (~$0.38 a run); Haiku 5.5 finds 73% for about a cent. No false
+> positives on the buggy site, one in two runs on the clean site, and three real bugs nobody
+> seeded ([Results](#results)).
 
 ## Layout
 
@@ -136,16 +137,34 @@ check rather than trusted. The agent never sees the manifest, and BuggyShop expo
 
 ## Results
 
-Claude Haiku 5.5, 40-step budget, BuggyShop with all 5 bugs on, 3 runs:
+Three Claude models, 40-step budget, BuggyShop with all 5 bugs on, 3 runs each:
 
-| | |
-|---|---|
-| recall | **73%** mean (80%, 60%, 80%) |
-| precision | **100%**, 0 false positives |
-| found every run | `cart-zero-qty`, `coupon-500-silent`, `reviews-tab-typeerror` |
-| found 1 run in 3 | `signup-email-validation`, `product-img-alt` |
-| extra finds | 2 real bugs that were not seeded: the cart accepts fractional quantities (2.5 mugs) and has no maximum |
-| cost / time | about **$0.01** and **1 minute** per run; ~94% of input tokens were cache reads |
+| | Haiku 5.5 | Sonnet 5.5 | Opus 5.5 |
+|---|---|---|---|
+| recall (mean) | 73% (80, 60, 80) | 80% (80, 80, 80) | **100%** (every run) |
+| precision | 100% | 100% | 100% |
+| extra finds (real, not seeded) | 3 across the runs | 0 | 1 every run (fractional quantities) |
+| duplicates | 1 | 0 | 1 (the run's own summary flags it as a likely duplicate) |
+| steps per run | up to 40 | 11–12 | 26–34 |
+| time per run | ~1 min | ~30 s | ~1.5 min |
+| cost per run | **~$0.01** | ~$0.06 | ~$0.38 |
+
+How often each seeded bug was found:
+
+| bug | Haiku | Sonnet | Opus |
+|---|---|---|---|
+| `cart-zero-qty` | 3/3 | 3/3 | 3/3 |
+| `coupon-500-silent` | 3/3 | 3/3 | 3/3 |
+| `reviews-tab-typeerror` | 3/3 | 3/3 | 3/3 |
+| `signup-email-validation` | 1/3 | 3/3 | 3/3 |
+| `product-img-alt` | 1/3 | **0/3** | 3/3 |
+
+Sonnet is the most consistent and the fastest, but it calls the job done after about 11 steps
+and never looks at accessibility. Opus keeps going: negative and fractional quantities, an empty
+coupon, a product that does not exist, a reload to check the cart survives. Its summaries also
+list what it did not test. Haiku is the cheap one: about a cent a run, with prompt caching
+turning ~94% of input tokens into cache reads. A sensible split is Haiku on every change and
+Opus before a release.
 
 On the clean site (every seeded bug off), 2 runs: **5 reports, 1 false positive** (an empty
 coupon code gets "not valid" and a server round trip, which is arguably fine). The other 4 were
@@ -192,9 +211,8 @@ evidence and did not recognise it as a bug.
 - [x] eval scorer (recall, precision, duplicates, false positives) with tests
 - [x] run viewer
 - [x] first runs on free tiers
-- [x] repeated runs with Claude Haiku 5.5: recall 73%, precision 100%
+- [x] 3 runs each on Claude Haiku, Sonnet and Opus 5.5: recall 73% / 80% / 100%, precision 100%
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
-- [ ] Sonnet and Opus for comparison
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
 - [ ] eval runner: recall, precision, pass^k, injection resistance, cost per run
