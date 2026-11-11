@@ -25,6 +25,8 @@ export type AgentOptions = {
   maxSteps: number;
   maxCostUsd: number;
   effort: Effort;
+  // "budget" tells the model its step budget and asks it to keep testing until it is used.
+  prompt?: PromptVariant;
   // Where to save a screenshot for each filed bug. Leave out to skip screenshots.
   screenshotDir?: string;
   log?: (line: string) => void;
@@ -57,13 +59,19 @@ export type AgentResult = {
   messages: unknown;
 };
 
-const systemPrompt = (target: string) => `You are a QA engineer testing the web app at ${target}.
+export type PromptVariant = "default" | "budget";
+
+const systemPrompt = (target: string, variant: PromptVariant, maxSteps: number) => `You are a QA engineer testing the web app at ${target}.
 
 Explore it the way a careful tester would: visit every page you can reach, use the main flows end to end, and try edge cases (empty, zero, negative and malformed input). After each action, check what the page shows, and check console_errors and network_errors: some bugs are only visible there.
 
 When you confirm a bug, file it right away with report_bug. Report only what you observed through the tools, one report per distinct bug. When you have covered the site, call finish.
 
-You can only reach ${target}. Element refs change whenever the page updates, so take a new snapshot before clicking or typing on a changed page.`;
+You can only reach ${target}. Element refs change whenever the page updates, so take a new snapshot before clicking or typing on a changed page.${variant === "budget" ? budgetNote(maxSteps) : ""}`;
+
+const budgetNote = (maxSteps: number) => `
+
+You have ${maxSteps} steps. Use them: stopping early with parts of the site untested is worse than running out of steps. Before you call finish, list the pages, flows and controls you have not tried yet. If anything is on that list and you have steps left, test it instead of finishing.`;
 
 export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const log = opts.log ?? (() => {});
@@ -77,7 +85,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
   const providerOptions: ProviderOptions = {
     model: opts.model,
-    system: systemPrompt(opts.target),
+    system: systemPrompt(opts.target, opts.prompt ?? "default", opts.maxSteps),
     firstMessage: `Test ${opts.target} and report every bug you find.`,
     tools: [...browserTools, ...localTools],
     effort: opts.effort,

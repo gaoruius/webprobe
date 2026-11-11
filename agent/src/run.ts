@@ -12,7 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { PROVIDERS, runAgent, type AgentOptions, type ProviderName } from "./agent.js";
+import { PROVIDERS, runAgent, type AgentOptions, type PromptVariant, type ProviderName } from "./agent.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MANIFEST = path.join(here, "../../buggyshop/bugs.manifest.json");
@@ -41,6 +41,7 @@ const liveBugs =
 const maxSteps = Number(process.env.WEBPROBE_MAX_STEPS ?? 40);
 const maxCostUsd = Number(process.env.WEBPROBE_MAX_COST_USD ?? 2);
 const effort = (process.env.WEBPROBE_EFFORT ?? "medium") as AgentOptions["effort"];
+const prompt = (process.env.WEBPROBE_PROMPT ?? "default") as PromptVariant;
 
 if (!(provider in PROVIDERS)) {
   console.error(`Unknown WEBPROBE_PROVIDER "${provider}". Use one of: ${Object.keys(PROVIDERS).join(", ")}`);
@@ -73,7 +74,7 @@ await mcp.connect(
   }),
 );
 
-console.log(`WebProbe: ${provider}, effort ${effort}, up to ${maxSteps} steps / $${maxCostUsd} on ${target}\n`);
+console.log(`WebProbe: ${provider}, effort ${effort}, prompt ${prompt}, up to ${maxSteps} steps / $${maxCostUsd} on ${target}\n`);
 const started = Date.now();
 const runDir = path.resolve(here, "../runs", new Date(started).toISOString().replace(/[:.]/g, "-"));
 mkdirSync(runDir, { recursive: true });
@@ -85,6 +86,7 @@ const result = await runAgent({
   maxSteps,
   maxCostUsd,
   effort,
+  prompt,
   screenshotDir: runDir,
   log: console.log,
 });
@@ -93,7 +95,7 @@ await mcp.close();
 const { messages, ...report } = result;
 writeFileSync(
   path.join(runDir, "report.json"),
-  JSON.stringify({ effort, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
+  JSON.stringify({ effort, prompt, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
 );
 writeFileSync(path.join(runDir, "transcript.json"), JSON.stringify(messages, null, 2));
 

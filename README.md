@@ -47,6 +47,7 @@ cd agent && npm install && npm start
 #    provider: WEBPROBE_PROVIDER=claude|gemini|groq (default: the first one with a key)
 #    model:    WEBPROBE_MODEL (defaults: claude-opus-5-5, gemini-3.8-flash, openai/gpt-oss-120b)
 #    budgets:  WEBPROBE_MAX_STEPS (40), WEBPROBE_MAX_COST_USD (2), WEBPROBE_EFFORT (medium)
+#    prompt:   WEBPROBE_PROMPT=budget  (tell the model its step budget; see Results)
 #    against the clean site, tell the eval: WEBPROBE_LIVE_BUGS=none npm start
 
 # 4. score runs
@@ -180,6 +181,13 @@ summaries say so ("I did not test checkout or search"), so it never reaches the 
 the site. Haiku and Opus use nearly the whole budget. On this kind of task, how long a model
 keeps exploring matters as much as how well it reasons, and one run per model would not have
 shown it: Sonnet misses the same four bugs every time.
+
+Is it the budget or the model? Steps undersell the gap: Sonnet makes ~3 tool calls per step, but
+it still takes about 20 browser actions (navigate, click, type) per run where Haiku and Opus take
+45–50. A prompt variant (`WEBPROBE_PROMPT=budget`) tells the model its step budget and asks it to
+list what it has not tested before finishing. With it, Sonnet takes 14–18 steps and recall goes
+from 57% to **67%** (70, 60, 70; 3 runs, $0.10 a run). It now always tests search and sort, but it
+still writes "I did not test checkout" and calls finish anyway, so `order-link-404` stays at 0/3.
 
 ### v0.1: 5 bugs
 
