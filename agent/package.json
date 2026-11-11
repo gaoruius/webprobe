@@ -7,7 +7,8 @@
     "start": "tsx --env-file-if-exists=.env src/run.ts",
     "eval": "tsx src/eval.ts",
     "test": "tsx --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gen-tests": "tsx --env-file-if-exists=.env src/gen-tests.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
@@ -17,6 +18,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@types/node": "^20.19.43",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"

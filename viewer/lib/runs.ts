@@ -15,6 +15,16 @@ export type ToolCall = { step: number; name: string; input: unknown; isError: bo
 
 export type FiledBug = BugReport & { screenshot?: string };
 
+// Regression tests written by `npm run gen-tests` (agent/src/gen-tests.ts), one per bug.
+export type RegressionTest = {
+  bug: number;
+  status: "valid" | "passes-on-buggy" | "fails-on-clean" | "no-test";
+  attempts: number;
+  code?: string;
+};
+
+export type RunTests = { model: string; costUsd: number; byBug: Map<number, RegressionTest> };
+
 export type Run = {
   id: string;
   startedAt: Date;
@@ -35,6 +45,7 @@ export type Run = {
   bugs: FiledBug[];
   toolCalls: ToolCall[];
   score: Score;
+  tests?: RunTests;
 };
 
 type Manifest = { bugs: TruthBug[]; extras?: ExtraBug[] };
@@ -73,7 +84,20 @@ export function getRun(id: string, bugs = truth(), extraBugs = extras()): Run | 
     summary: raw.summary ?? "",
     toolCalls: raw.toolCalls ?? [],
     score: score(raw.bugs ?? [], liveBugs(bugs, live), extraBugs),
+    tests: readTests(path.join(RUNS_DIR, id, "tests")),
   };
+}
+
+function readTests(dir: string): RunTests | undefined {
+  const file = path.join(dir, "tests.json");
+  if (!existsSync(file)) return undefined;
+  const raw = JSON.parse(readFileSync(file, "utf8"));
+  const byBug = new Map<number, RegressionTest>();
+  for (const r of raw.results as (RegressionTest & { file?: string })[]) {
+    const code = r.file && existsSync(path.join(dir, r.file)) ? readFileSync(path.join(dir, r.file), "utf8") : undefined;
+    byBug.set(r.bug, { bug: r.bug, status: r.status, attempts: r.attempts, code });
+  }
+  return { model: raw.model, costUsd: raw.costUsd, byBug };
 }
 
 export function listRuns(): Run[] {

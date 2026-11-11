@@ -53,9 +53,13 @@ cd agent && npm install && npm start
 
 # 4. score runs
 npm run eval -- runs/<dir> runs/<dir> ...           # recall, precision, false positives
-npm test                                           # tests for the scorer
+npm test                                           # tests for the scorer and page tracking
 
-# 5. browse runs
+# 5. turn a run's bug reports into Playwright regression tests
+#    needs the clean site too:  cd buggyshop && npm run dev:clean-side   (http://localhost:3002)
+npm run gen-tests -- runs/<dir>                     # writes runs/<dir>/tests/; model: claude-haiku-5-5
+
+# 6. browse runs
 cd viewer && npm install && npm run dev            # http://localhost:3001
 ```
 
@@ -246,6 +250,36 @@ The lite run also caught a bug in the ground truth: the manifest pinned the revi
 What they show: the plumbing holds up across three APIs, but the open models on Groq saw bug
 evidence and did not recognise it as a bug.
 
+## Regression tests from bug reports
+
+A bug report tells you something broke once; a test keeps it fixed. `gen-tests` asks a model to
+turn each report into a Playwright test (`@playwright/test`, role and label locators), using the
+report, the agent's actions with element refs resolved to names ("click button \"Apply\""), and
+the last snapshot of each page.
+
+The model only gets what a team would have before the fix: the buggy build. Its test has to
+fail there; it reads the failure and either confirms it is the bug or fixes a broken test (up to
+3 writes). Then the clean site judges it once, with nothing sent back: a **valid** test fails
+with the bug and passes without it.
+
+Haiku writing tests for 4 runs (3 Opus, 1 Haiku), 43 reports:
+
+| | |
+|---|---|
+| valid, of 40 reports of seeded bugs | **32 (80%)**, about $0.002 a test |
+| valid tests that also fail with *only their own* bug on | 32 of 32 (a one-off check with one bug live at a time) |
+| tests for the unseeded fractional-quantity bug | 3 of 3 fail on the clean site too, which is right: the bug is there |
+| Sonnet instead of Haiku, same 10 reports | 8 of 10 valid, at 13x the cost |
+
+The misses are one kind of mistake: a test written against the broken app asserts details of the
+broken app. "View order" tests check the URL is `/order/1001` (the bad link the agent followed; the
+real page is `/orders/1001`) in 4 of 4 runs, even though the prompt says not to. Others expected
+"$0.00" where the fixed checkout says "Free", or kept typing into a quantity box that the fix
+removes. A first version of the loop sent the clean site's output back to the model and reached
+10 of 10, but no team has the fixed app while writing the test, so that number was not honest.
+
+The viewer shows each test under its bug, with its status.
+
 ## Roadmap
 
 - [x] BuggyShop with 5 switchable bugs + ground-truth manifest
@@ -261,6 +295,7 @@ evidence and did not recognise it as a bug.
 - [x] 3 runs each on Claude Haiku, Sonnet and Opus 5.5: recall 73% / 80% / 100%, precision 100%
 - [x] 5 harder bugs (search, sort, checkout, order page); same 3 models: 87% / 57% / 100%
 - [x] Sonnet experiments: budget prompt 67%, page-coverage gate 57% (every page opened)
+- [x] regression tests from bug reports, judged on the clean site: 80% valid
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split

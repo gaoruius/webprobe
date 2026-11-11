@@ -6,7 +6,8 @@
     "dev": "next dev -p 3000",
     "dev:clean": "NEXT_PUBLIC_BUGS=none next dev -p 3000",
     "build": "next build",
-    "start": "next start -p 3000"
+    "start": "next start -p 3000",
+    "dev:clean-side": "NEXT_PUBLIC_BUGS=none NEXT_DIST_DIR=.next-clean next dev -p 3002"
   },
   "dependencies": {
     "next": "16.4.5",

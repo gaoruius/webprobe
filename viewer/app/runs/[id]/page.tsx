@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Stat, StopBadge, RecallBar } from "@/components/ui";
 import { brief, duration, pageOf, tokens, usd, when } from "@/lib/format";
-import { getRun, truth, type FiledBug, type ToolCall } from "@/lib/runs";
+import { getRun, truth, type FiledBug, type RegressionTest, type ToolCall } from "@/lib/runs";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +43,12 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         <Stat label="Time" value={duration(run.seconds)} />
         <Stat label="Cost" value={usd(run.costUsd)} />
         <Stat label="Tokens in / out" value={`${tokens(run.usage.input + run.usage.cacheRead)} / ${tokens(run.usage.output)}`} />
+        {run.tests && (
+          <Stat
+            label="Regression tests"
+            value={`${[...run.tests.byBug.values()].filter((t) => t.status === "valid").length} / ${run.tests.byBug.size} valid`}
+          />
+        )}
       </div>
 
       {run.error && (
@@ -94,7 +100,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         {run.bugs.length === 0 && <p className="muted">The agent filed no bugs.</p>}
         <div className="cards">
           {run.bugs.map((bug, i) => (
-            <BugCard key={i} runId={run.id} index={i} bug={bug} verdict={verdict.get(i)} />
+            <BugCard key={i} runId={run.id} index={i} bug={bug} verdict={verdict.get(i)} test={run.tests?.byBug.get(i + 1)} />
           ))}
         </div>
       </section>
@@ -141,11 +147,13 @@ function BugCard({
   index,
   bug,
   verdict,
+  test,
 }: {
   runId: string;
   index: number;
   bug: FiledBug;
   verdict?: Verdict;
+  test?: RegressionTest;
 }) {
   return (
     <article className="card" id={`bug-${index}`}>
@@ -189,6 +197,33 @@ function BugCard({
       </div>
       <h4>Evidence</h4>
       <pre>{bug.evidence}</pre>
+      {test && <TestPanel test={test} />}
     </article>
+  );
+}
+
+const TEST_STATUS: Record<RegressionTest["status"], { label: string; tone: string; note: string }> = {
+  valid: { label: "valid", tone: "badge-good", note: "Fails with the bug, passes on the clean site." },
+  "fails-on-clean": {
+    label: "fails on clean site",
+    tone: "badge-bad",
+    note: "Also fails on the clean site: it asserts something else, or the bug is real and not seeded.",
+  },
+  "passes-on-buggy": { label: "misses the bug", tone: "badge-bad", note: "Passes on the buggy site, so it would not catch the bug." },
+  "no-test": { label: "no test", tone: "badge-neutral", note: "The model did not return a test." },
+};
+
+function TestPanel({ test }: { test: RegressionTest }) {
+  const s = TEST_STATUS[test.status];
+  return (
+    <details className="test">
+      <summary>
+        <span className="small">Regression test</span> <span className={`badge ${s.tone}`}>{s.label}</span>{" "}
+        <span className="muted small">
+          {s.note} {test.attempts > 1 ? `${test.attempts} attempts.` : ""}
+        </span>
+      </summary>
+      {test.code && <pre>{test.code}</pre>}
+    </details>
   );
 }

@@ -486,3 +486,20 @@ pre {
   color: var(--muted);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
 }
+
+/* Regression test under a bug card */
+.test {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.test summary {
+  cursor: pointer;
+}
+
+.test pre {
+  margin-top: 8px;
+  max-height: 480px;
+  overflow-y: auto;
+}
