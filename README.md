@@ -48,6 +48,7 @@ cd agent && npm install && npm start
 #    model:    WEBPROBE_MODEL (defaults: claude-opus-5-5, gemini-3.8-flash, openai/gpt-oss-120b)
 #    budgets:  WEBPROBE_MAX_STEPS (40), WEBPROBE_MAX_COST_USD (2), WEBPROBE_EFFORT (medium)
 #    prompt:   WEBPROBE_PROMPT=budget  (tell the model its step budget; see Results)
+#    gate:     WEBPROBE_COVERAGE_GATE=1  (refuse finish while linked pages are unopened)
 #    against the clean site, tell the eval: WEBPROBE_LIVE_BUGS=none npm start
 
 # 4. score runs
@@ -189,6 +190,15 @@ list what it has not tested before finishing. With it, Sonnet takes 14–18 step
 from 57% to **67%** (70, 60, 70; 3 runs, $0.10 a run). It now always tests search and sort, but it
 still writes "I did not test checkout" and calls finish anyway, so `order-link-404` stays at 0/3.
 
+A harness rule instead of a prompt: with `WEBPROBE_COVERAGE_GATE=1` the loop collects every
+same-site link in the snapshots and refuses `finish` (up to 3 times, while more than 3 steps are
+left) if any linked page was never opened. It reads the tools' output, not anything about
+BuggyShop. With it, Sonnet opened **every page in all 3 runs**, and recall stayed at **57%**
+(60, 50, 60). It opened /checkout and looked, but never placed an order, typed a lowercase
+search, added $50 of items or checked image names. The gap is depth, not breadth: visiting a page
+is not testing it. A gate on pages is easy to satisfy; a gate on behaviour would need to know
+what the page does, which is the tester's job.
+
 ### v0.1: 5 bugs
 
 Same setup with the first 5 bugs:
@@ -250,6 +260,7 @@ evidence and did not recognise it as a bug.
 - [x] first runs on free tiers
 - [x] 3 runs each on Claude Haiku, Sonnet and Opus 5.5: recall 73% / 80% / 100%, precision 100%
 - [x] 5 harder bugs (search, sort, checkout, order page); same 3 models: 87% / 57% / 100%
+- [x] Sonnet experiments: budget prompt 67%, page-coverage gate 57% (every page opened)
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split

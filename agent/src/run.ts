@@ -42,6 +42,7 @@ const maxSteps = Number(process.env.WEBPROBE_MAX_STEPS ?? 40);
 const maxCostUsd = Number(process.env.WEBPROBE_MAX_COST_USD ?? 2);
 const effort = (process.env.WEBPROBE_EFFORT ?? "medium") as AgentOptions["effort"];
 const prompt = (process.env.WEBPROBE_PROMPT ?? "default") as PromptVariant;
+const coverageGate = process.env.WEBPROBE_COVERAGE_GATE === "1";
 
 if (!(provider in PROVIDERS)) {
   console.error(`Unknown WEBPROBE_PROVIDER "${provider}". Use one of: ${Object.keys(PROVIDERS).join(", ")}`);
@@ -74,7 +75,7 @@ await mcp.connect(
   }),
 );
 
-console.log(`WebProbe: ${provider}, effort ${effort}, prompt ${prompt}, up to ${maxSteps} steps / $${maxCostUsd} on ${target}\n`);
+console.log(`WebProbe: ${provider}, effort ${effort}, prompt ${prompt}${coverageGate ? ", coverage gate" : ""}, up to ${maxSteps} steps / $${maxCostUsd} on ${target}\n`);
 const started = Date.now();
 const runDir = path.resolve(here, "../runs", new Date(started).toISOString().replace(/[:.]/g, "-"));
 mkdirSync(runDir, { recursive: true });
@@ -87,6 +88,7 @@ const result = await runAgent({
   maxCostUsd,
   effort,
   prompt,
+  coverageGate,
   screenshotDir: runDir,
   log: console.log,
 });
@@ -95,7 +97,7 @@ await mcp.close();
 const { messages, ...report } = result;
 writeFileSync(
   path.join(runDir, "report.json"),
-  JSON.stringify({ effort, prompt, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
+  JSON.stringify({ effort, prompt, coverageGate, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
 );
 writeFileSync(path.join(runDir, "transcript.json"), JSON.stringify(messages, null, 2));
 

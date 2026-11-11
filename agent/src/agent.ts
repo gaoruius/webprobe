@@ -27,6 +27,8 @@ export type AgentOptions = {
   effort: Effort;
   // "budget" tells the model its step budget and asks it to keep testing until it is used.
   prompt?: PromptVariant;
+  // Refuse `finish` while pages linked from visited pages are still unopened and steps remain.
+  coverageGate?: boolean;
   // Where to save a screenshot for each filed bug. Leave out to skip screenshots.
   screenshotDir?: string;
   log?: (line: string) => void;
@@ -43,6 +45,28 @@ export type FiledBug = BugReport & { screenshot?: string };
 // ends the run having filed nothing it saw.
 const WRAP_UP_TURNS = 5;
 
+// The coverage gate stops refusing after this many refusals, or when this few steps are left.
+const MAX_GATE_REFUSALS = 3;
+const GATE_RESERVE_STEPS = 3;
+
+// Same-site pages, as paths, that the browser was on ("URL: …", "Opened …", "Now at …") and that
+// snapshots linked to ("/url: …"). Generic: it reads the browser tools' output, not the site.
+export function pagesIn(output: string, origin: string): { visited: string[]; linked: string[] } {
+  const path = (url: string) => {
+    try {
+      const u = new URL(url.replace(/^['"]|['".,]+$/g, ""), origin);
+      return u.origin === origin ? u.pathname.replace(/(.)\/+$/, "$1") : null;
+    } catch {
+      return null;
+    }
+  };
+  const all = (re: RegExp) => [...output.matchAll(re)].map((m) => path(m[1])).filter((p): p is string => p !== null);
+  return {
+    visited: all(/(?:^URL: |Opened |Now at )(\S+)/gm),
+    linked: all(/^\s*- \/url: (\S+)/gm),
+  };
+}
+
 export type ToolCall = { step: number; name: string; input: unknown; isError: boolean; output: string };
 
 export type AgentResult = {
@@ -56,6 +80,8 @@ export type AgentResult = {
   usage: Usage;
   costUsd: number;
   toolCalls: ToolCall[];
+  // Same-site pages the agent opened, and ones it saw linked but never opened.
+  pages: { visited: string[]; unvisited: string[] };
   messages: unknown;
 };
 
@@ -109,6 +135,11 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let step = 0;
   let finished = false;
   let error: string | undefined;
+  const origin = new URL(opts.target).origin;
+  const visited = new Set<string>();
+  const linked = new Set<string>();
+  const unvisited = () => [...linked].filter((p) => !visited.has(p));
+  let gateRefusals = 0;
 
   // A screenshot of the page as it is when the bug is filed. Best effort: a report without
   // one is still a report.
@@ -139,6 +170,18 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       return { use, output: "Out of steps: only report_bug and finish work now.", isError: true };
     }
     if (use.name === "finish") {
+      const left = opts.maxSteps - step;
+      const missing = unvisited();
+      if (opts.coverageGate && missing.length && left > GATE_RESERVE_STEPS && gateRefusals < MAX_GATE_REFUSALS) {
+        gateRefusals++;
+        return {
+          use,
+          output:
+            `Not finished: pages you saw linked but never opened: ${missing.join(", ")}. ` +
+            `You have ${left} steps left. Test those pages, then call finish.`,
+          isError: true,
+        };
+      }
       const parsed = Finish.safeParse(use.input);
       summary = parsed.success ? parsed.data.summary : "";
       finished = true;
@@ -150,6 +193,9 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     const output = (res.content as { type: string; text?: string }[])
       .map((c) => c.text ?? `[${c.type}]`)
       .join("\n");
+    const pages = pagesIn(output, origin);
+    pages.visited.forEach((p) => visited.add(p));
+    pages.linked.forEach((p) => linked.add(p));
     return { use, output, isError: Boolean(res.isError) };
   }
 
@@ -221,6 +267,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     usage,
     costUsd: cost(),
     toolCalls,
+    pages: { visited: [...visited].sort(), unvisited: unvisited().sort() },
     messages: model.history(),
   };
 }
