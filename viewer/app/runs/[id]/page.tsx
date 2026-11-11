@@ -73,7 +73,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
                     </span>
                     <div>
                       <div className="score-id">
-                        {b.id} <span className="muted small">{b.category} · {b.page}</span>
+                        {b.id} <span className="muted small">{b.category} · {[b.page].flat().join(", ")}</span>
                       </div>
                       <div className="small">{b.summary}</div>
                       {hit && (

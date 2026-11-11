@@ -7,7 +7,7 @@
 // transcript.json (the full message history, for debugging the agent) and a bug-<n>.png
 // screenshot for each bug filed. View them with the viewer: cd viewer && npm run dev.
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -15,6 +15,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { PROVIDERS, runAgent, type AgentOptions, type ProviderName } from "./agent.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const MANIFEST = path.join(here, "../../buggyshop/bugs.manifest.json");
 const target = process.env.WEBPROBE_TARGET ?? "http://localhost:3000";
 // Default to whichever provider we have a key for, in this order.
 const KEY_VARS: Record<ProviderName, string> = {
@@ -31,7 +32,12 @@ const model = process.env.WEBPROBE_MODEL || undefined;
 // Which BuggyShop bugs were on for this run, for the eval. Set it to whatever
 // NEXT_PUBLIC_BUGS BuggyShop was started with ("none" for `npm run dev:clean`).
 // The agent never sees it.
-const liveBugs = process.env.WEBPROBE_LIVE_BUGS ?? "all";
+// "all" is recorded as the explicit list, so old runs still score right after bugs are added.
+const liveBugsSetting = process.env.WEBPROBE_LIVE_BUGS ?? "all";
+const liveBugs =
+  liveBugsSetting === "all"
+    ? (JSON.parse(readFileSync(MANIFEST, "utf8")).bugs as { id: string }[]).map((b) => b.id).join(",")
+    : liveBugsSetting;
 const maxSteps = Number(process.env.WEBPROBE_MAX_STEPS ?? 40);
 const maxCostUsd = Number(process.env.WEBPROBE_MAX_COST_USD ?? 2);
 const effort = (process.env.WEBPROBE_EFFORT ?? "medium") as AgentOptions["effort"];

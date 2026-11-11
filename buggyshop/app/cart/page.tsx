@@ -1,13 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useCart } from "@/components/CartProvider";
 import { isBugOn } from "@/lib/bugs";
 
 export default function CartPage() {
-  const { items, setQuantity, total } = useCart();
+  const { items, setQuantity, total, discount, setDiscount } = useCart();
   const [code, setCode] = useState("");
-  const [discount, setDiscount] = useState(0);
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string } | null>(null);
 
   async function applyCoupon() {
@@ -83,6 +83,10 @@ export default function CartPage() {
       {message && <p className={message.kind}>{message.text}</p>}
 
       <h2>Total: ${finalTotal.toFixed(2)}</h2>
+      <p className="muted">Free shipping when your items come to more than $50.</p>
+      <Link href="/checkout" className="button">
+        Checkout
+      </Link>
     </>
   );
 }

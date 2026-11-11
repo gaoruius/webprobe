@@ -89,6 +89,8 @@ export type ModelSummary = {
   key: string;
   provider: string;
   model: string;
+  // What the runs were scored against: "5 bugs", "10 bugs", "clean site".
+  site: string;
   runs: number;
   recall: number | null;
   precision: number | null;
@@ -102,24 +104,28 @@ const mean = (xs: (number | null)[]) => {
   return ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : null;
 };
 
-// One row per provider/model. Runs that crashed before doing anything are left out:
+const siteOf = (r: Run) => (r.score.live.length ? `${r.score.live.length} bugs` : "clean site");
+
+// One row per provider/model and set of live bugs, since recall on 5 bugs and on 10 don't average. Runs that crashed before doing anything are left out:
 // they say nothing about the model.
 export function summarizeByModel(runs: Run[]): ModelSummary[] {
   const groups = new Map<string, Run[]>();
   for (const r of runs) {
     if (r.stoppedBecause === "error" && r.steps <= 1) continue;
-    const key = `${r.provider}/${r.model}`;
+    const key = `${r.provider}/${r.model}/${siteOf(r)}`;
     groups.set(key, [...(groups.get(key) ?? []), r]);
   }
   return [...groups.entries()].map(([key, rs]) => ({
     key,
     provider: rs[0].provider,
     model: rs[0].model,
+    site: siteOf(rs[0]),
     runs: rs.length,
     recall: mean(rs.map((r) => r.score.recall)),
     precision: mean(rs.map((r) => r.score.precision)),
     falsePositivesPerRun: rs.reduce((a, r) => a + r.score.falsePositives.length, 0) / rs.length,
     avgSteps: rs.reduce((a, r) => a + r.steps, 0) / rs.length,
     costUsd: rs.reduce((a, r) => a + r.costUsd, 0),
-  }));
+  }))
+    .sort((a, b) => (parseInt(b.site) || 0) - (parseInt(a.site) || 0));
 }

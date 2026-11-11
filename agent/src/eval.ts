@@ -20,7 +20,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { BugReport } from "./tools.js";
 
-export type TruthBug = { id: string; page: string; category: string; summary: string; match: string };
+export type TruthBug = { id: string; page: string | string[]; category: string; summary: string; match: string };
 
 export type Score = {
   live: string[];
@@ -60,10 +60,13 @@ export function liveBugs(truth: TruthBug[], live: string): TruthBug[] {
   return truth.filter((b) => ids.has(b.id));
 }
 
-export type ExtraBug = { id: string; page: string; match: string; summary: string };
+export type ExtraBug = { id: string; page: string | string[]; match: string; summary: string };
 
-const hits = (r: BugReport, b: { page: string; match: string }) =>
-  pageMatches(r.page, b.page) && new RegExp(b.match, "i").test(`${r.title}\n${r.actual}\n${r.evidence}`);
+// A bug can list several pages when it can fairly be reported from any of them.
+const onPage = (r: BugReport, page: string | string[]) => [page].flat().some((p) => pageMatches(r.page, p));
+
+const hits = (r: BugReport, b: { page: string | string[]; match: string }) =>
+  onPage(r, b.page) && new RegExp(b.match, "i").test(`${r.title}\n${r.actual}\n${r.evidence}`);
 
 export function score(reports: BugReport[], live: TruthBug[], extraBugs: ExtraBug[] = []): Score {
   const found: Score["found"] = [];
@@ -85,7 +88,7 @@ export function score(reports: BugReport[], live: TruthBug[], extraBugs: ExtraBu
     // (a discounted price looks like a fractional quantity).
     const extra = bug
       ? undefined
-      : extraBugs.find((b) => pageMatches(r.page, b.page) && new RegExp(b.match, "i").test(r.title));
+      : extraBugs.find((b) => onPage(r, b.page) && new RegExp(b.match, "i").test(r.title));
     if (extra) extras.push({ id: extra.id, report: i });
     else if (!bug) falsePositives.push(i);
     else if (found.some((f) => f.id === bug.id)) duplicates.push({ id: bug.id, report: i });

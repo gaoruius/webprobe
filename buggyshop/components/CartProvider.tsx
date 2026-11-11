@@ -11,15 +11,21 @@ type CartContextValue = {
   items: CartItem[];
   add: (item: { id: string; name: string; price: number }) => void;
   setQuantity: (id: string, qty: number) => void;
+  clear: () => void;
   count: number;
   total: number;
+  // Coupon percent off. Kept here, not on the cart page, so checkout charges the same total.
+  discount: number;
+  setDiscount: (percentOff: number) => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
 const STORAGE_KEY = "buggyshop-cart";
+const DISCOUNT_KEY = "buggyshop-discount";
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [discount, setDiscount] = useState(0);
   // Don't write to storage until we've read from it, or the first render's empty
   // cart would overwrite the saved one on every page load.
   const [loaded, setLoaded] = useState(false);
@@ -28,6 +34,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setItems(JSON.parse(saved));
+      setDiscount(Number(localStorage.getItem(DISCOUNT_KEY)) || 0);
     } catch {}
     setLoaded(true);
   }, []);
@@ -36,8 +43,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     if (!loaded) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      localStorage.setItem(DISCOUNT_KEY, String(discount));
     } catch {}
-  }, [items, loaded]);
+  }, [items, discount, loaded]);
 
   function add(p: { id: string; name: string; price: number }) {
     setItems((prev) => {
@@ -63,11 +71,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   }
 
+  function clear() {
+    setItems([]);
+    setDiscount(0);
+  }
+
   const count = items.reduce((n, i) => n + i.shownQty, 0);
   const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
 
   return (
-    <CartContext.Provider value={{ items, add, setQuantity, count, total }}>{children}</CartContext.Provider>
+    <CartContext.Provider value={{ items, add, setQuantity, clear, count, total, discount, setDiscount }}>{children}</CartContext.Provider>
   );
 }
 

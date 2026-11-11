@@ -1,5 +1,5 @@
 {
-  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file. `match` is a case-insensitive regex the eval runs over a report's title, actual and evidence; a report counts as finding a bug when its page is the bug's page (`*` matches any one path segment) and `match` hits.",
+  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file. `match` is a case-insensitive regex the eval runs over a report's title, actual and evidence; a report counts as finding a bug when its page is the bug's page, or one of them when `page` is a list (`*` matches any one path segment), and `match` hits.",
   "bugs": [
     {
       "id": "cart-zero-qty",
@@ -29,7 +29,7 @@
       "summary": "Product images on the home page have no alt text.",
       "expected": "Each product image has alt text with the product name.",
       "how_to_trigger": "Inspect the images on / (accessibility tree shows unnamed images).",
-      "match": "\\balt\\b|alt text|image|img"
+      "match": "\\balt\\b|alt text|accessible name|unnamed|no (text )?(name|label)"
     },
     {
       "id": "coupon-500-silent",
@@ -50,6 +50,60 @@
       "expected": "Reviews tab opens and lists the reviews.",
       "how_to_trigger": "Open any product page (e.g. /product/mug) and click 'Reviews (2)'.",
       "match": "review|typeerror"
+    },
+    {
+      "id": "search-case-sensitive",
+      "category": "functional",
+      "severity": "major",
+      "page": "/",
+      "summary": "Product search is case-sensitive: 'mug' finds nothing, 'Mug' finds the Ceramic Mug.",
+      "expected": "Search ignores case.",
+      "how_to_trigger": "On /, type 'mug' in Search products.",
+      "match": "search|case"
+    },
+    {
+      "id": "sort-price-string",
+      "category": "functional",
+      "severity": "major",
+      "page": "/",
+      "summary": "Sorting by price compares prices as text: low to high gives $14, $39, $9.",
+      "expected": "Low to high gives $9, $14, $39.",
+      "how_to_trigger": "On /, click 'Price: low to high'.",
+      "match": "sort|order|low to high|high to low|ascending|descending"
+    },
+    {
+      "id": "checkout-free-shipping",
+      "category": "functional",
+      "severity": "major",
+      "page": "/checkout",
+      "summary": "Orders over $50 are still charged $5 shipping: the check uses the item count, not the price.",
+      "expected": "Shipping is free when the items come to more than $50.",
+      "how_to_trigger": "Add the lamp and the mug ($53), open /checkout.",
+      "match": "shipping"
+    },
+    {
+      "id": "checkout-zip-unlabeled",
+      "category": "a11y",
+      "severity": "minor",
+      "page": "/checkout",
+      "summary": "The ZIP code field on checkout has no label, so it has no accessible name.",
+      "expected": "The field is labelled 'ZIP code'.",
+      "how_to_trigger": "Open /checkout with items in the cart; the accessibility tree shows an unnamed textbox.",
+      "match": "zip|postal|label|accessible name|unnamed"
+    },
+    {
+      "id": "order-link-404",
+      "category": "network",
+      "severity": "major",
+      "page": [
+        "/checkout",
+        "/order/*",
+        "/orders/*"
+      ],
+      "summary": "After placing an order, 'View order' links to /order/<id>, which is a 404 (the page is /orders/<id>).",
+      "expected": "The link opens the order.",
+      "how_to_trigger": "Place an order on /checkout, click 'View order #1001'.",
+      "match": "404|not found|view order|order (link|page|details)"
     }
   ],
   "extras_description": "Real defects that were not seeded: an agent reported them and a person confirmed them in the code. Matched on a report's page and title only, since evidence often shows other problems on the same page. A matching report counts as correct for precision; extras are not part of recall, which is about the seeded bugs.",

@@ -12,6 +12,11 @@ export const BUG_IDS = [
   "product-img-alt",
   "coupon-500-silent",
   "reviews-tab-typeerror",
+  "search-case-sensitive",
+  "sort-price-string",
+  "checkout-free-shipping",
+  "checkout-zip-unlabeled",
+  "order-link-404",
 ] as const;
 
 export type BugId = (typeof BUG_IDS)[number];

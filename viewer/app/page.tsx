@@ -35,6 +35,7 @@ export default function Home() {
             <thead>
               <tr>
                 <th>Model</th>
+                <th>Site</th>
                 <th className="num">Runs</th>
                 <th>Mean recall</th>
                 <th className="num">Precision</th>
@@ -50,6 +51,7 @@ export default function Home() {
                     <div className="model">{m.model}</div>
                     <div className="muted small">{m.provider}</div>
                   </td>
+                  <td>{m.site}</td>
                   <td className="num">{m.runs}</td>
                   <td>
                     <RecallBar recall={m.recall} />

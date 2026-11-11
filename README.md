@@ -4,10 +4,10 @@ A front-end QA agent that explores a web app in a real browser, finds bugs, and 
 structured bug reports — plus an eval suite that measures how well (and how reliably) it does.
 
 > Status: **week 3.** The test site, the browser tool server, the agent loop (Claude, Gemini or
-> open models on Groq), the eval scorer and a run viewer all work. Claude Opus 5.5 found all 5
-> seeded bugs in each of 3 runs (~$0.38 a run); Haiku 5.5 finds 73% for about a cent. No false
-> positives on the buggy site, one in two runs on the clean site, and three real bugs nobody
-> seeded ([Results](#results)).
+> open models on Groq), the eval scorer and a run viewer all work. On the 10-bug site, Claude
+> Opus 5.5 found every bug in all 3 runs (~$0.55 a run), Haiku 5.5 found 87% for 2 cents, and
+> Sonnet 5.5 only 57% because it stops early. No false positives on the buggy site, one in two
+> runs on the clean site, and three real bugs nobody seeded ([Results](#results)).
 
 ## Layout
 
@@ -18,7 +18,7 @@ webprobe/
 │   └── bugs.manifest.json  ground truth for the eval — the agent never sees it
 ├── browser-mcp/          MCP server: the agent's only way to touch the browser
 │   ├── src/server.ts     tools: navigate, snapshot, click, type, console_errors, network_errors
-│   └── src/smoke-test.ts scripted run that reproduces every seeded bug through the tools
+│   └── src/smoke-test.ts scripted run that reproduces every v0.1 bug through the tools
 ├── agent/                hand-written agent loop (MCP client + model providers)
 │   ├── src/agent.ts      the loop: budgets, stuck detection, wrap-up turns
 │   ├── src/providers/    claude.ts, gemini.ts, groq.ts behind one small interface
@@ -66,7 +66,7 @@ If `npx playwright install` can't download Chromium, use your installed Chrome:
 (working directory `browser-mcp/`), then ask the host to explore http://localhost:3000.
 So far it has been exercised by `smoke-test.ts` through the MCP client SDK, not yet from a desktop host.
 
-## Seeded bugs (v0.1)
+## Seeded bugs
 
 | id | category | page | what's wrong |
 |---|---|---|---|
@@ -75,6 +75,19 @@ So far it has been exercised by `smoke-test.ts` through the MCP client SDK, not 
 | `product-img-alt` | a11y | / | product images have no alt text |
 | `coupon-500-silent` | network | /cart | coupon API returns 500, page shows nothing |
 | `reviews-tab-typeerror` | console | /product/* | Reviews tab throws TypeError, never opens |
+
+Added in v0.2, deeper in the site and needing more steps or some arithmetic to spot:
+
+| id | category | page | what's wrong |
+|---|---|---|---|
+| `search-case-sensitive` | functional | / | search for "mug" finds nothing; "Mug" works |
+| `sort-price-string` | functional | / | "Price: low to high" gives $14, $39, $9 (compares text) |
+| `checkout-free-shipping` | functional | /checkout | $53 of items still pays $5 shipping (checks item count, not price) |
+| `checkout-zip-unlabeled` | a11y | /checkout | ZIP code field has no accessible name |
+| `order-link-404` | network | /checkout, /order/* | "View order" after placing an order goes to a 404 |
+
+A bug's `page` can be a list when it can fairly be reported from more than one page. Runs record
+the exact bugs that were live, so runs from v0.1 still score out of 5.
 
 ## Browser MCP server
 
@@ -137,19 +150,17 @@ check rather than trusted. The agent never sees the manifest, and BuggyShop expo
 
 ## Results
 
-Three Claude models, 40-step budget, BuggyShop with all 5 bugs on, 3 runs each:
+### v0.2: 10 bugs
+
+Three Claude models, 40-step budget, BuggyShop with all 10 bugs on, 3 runs each:
 
 | | Haiku 5.5 | Sonnet 5.5 | Opus 5.5 |
 |---|---|---|---|
-| recall (mean) | 73% (80, 60, 80) | 80% (80, 80, 80) | **100%** (every run) |
+| recall (mean) | 87% (90, 70, 100) | 57% (50, 60, 60) | **100%** (every run) |
 | precision | 100% | 100% | 100% |
-| extra finds (real, not seeded) | 3 across the runs | 0 | 1 every run (fractional quantities) |
-| duplicates | 1 | 0 | 1 (the run's own summary flags it as a likely duplicate) |
-| steps per run | up to 40 | 11–12 | 26–34 |
-| time per run | ~1 min | ~30 s | ~1.5 min |
-| cost per run | **~$0.01** | ~$0.06 | ~$0.38 |
-
-How often each seeded bug was found:
+| steps per run | 36–38 | **10–16** | 36–38 |
+| time per run | ~1.5 min | ~35 s | ~2 min |
+| cost per run | **~$0.02** | ~$0.08 | ~$0.55 |
 
 | bug | Haiku | Sonnet | Opus |
 |---|---|---|---|
@@ -157,16 +168,34 @@ How often each seeded bug was found:
 | `coupon-500-silent` | 3/3 | 3/3 | 3/3 |
 | `reviews-tab-typeerror` | 3/3 | 3/3 | 3/3 |
 | `signup-email-validation` | 1/3 | 3/3 | 3/3 |
-| `product-img-alt` | 1/3 | **0/3** | 3/3 |
+| `product-img-alt` | 2/3 | **0/3** | 3/3 |
+| `search-case-sensitive` | 3/3 | **0/3** | 3/3 |
+| `sort-price-string` | 3/3 | 3/3 | 3/3 |
+| `checkout-free-shipping` | 3/3 | **0/3** | 3/3 |
+| `checkout-zip-unlabeled` | 2/3 | 2/3 | 3/3 |
+| `order-link-404` | 3/3 | **0/3** | 3/3 |
 
-Sonnet is the most consistent and the fastest, but it calls the job done after about 11 steps
-and never looks at accessibility. Opus keeps going: negative and fractional quantities, an empty
-coupon, a product that does not exist, a reload to check the cart survives. Its summaries also
-list what it did not test. Haiku is the cheap one: about a cent a run, with prompt caching
-turning ~94% of input tokens into cache reads. A sensible split is Haiku on every change and
-Opus before a release.
+The cheapest model beat the middle one. Sonnet stops after 10–16 of its 40 steps, and its
+summaries say so ("I did not test checkout or search"), so it never reaches the bugs deeper in
+the site. Haiku and Opus use nearly the whole budget. On this kind of task, how long a model
+keeps exploring matters as much as how well it reasons, and one run per model would not have
+shown it: Sonnet misses the same four bugs every time.
 
-On the clean site (every seeded bug off), 2 runs: **5 reports, 1 false positive** (an empty
+### v0.1: 5 bugs
+
+Same setup with the first 5 bugs:
+
+| | Haiku 5.5 | Sonnet 5.5 | Opus 5.5 |
+|---|---|---|---|
+| recall (mean) | 73% (80, 60, 80) | 80% (80, 80, 80) | **100%** (every run) |
+| precision | 100% | 100% | 100% |
+| cost per run | ~$0.01 | ~$0.06 | ~$0.38 |
+
+Sonnet never checked alt text (0/3); Opus also tried negative and fractional quantities, an empty
+coupon, a product that does not exist and a reload. Haiku's prompt caching turned ~94% of input
+tokens into cache reads.
+
+On the v0.1 clean site (every seeded bug off), Haiku, 2 runs: **5 reports, 1 false positive** (an empty
 coupon code gets "not valid" and a server round trip, which is arguably fine). The other 4 were
 real defects that were not seeded, including a third one found only here: after a valid coupon,
 an invalid one shows an error but leaves the old discount in the total.
@@ -212,6 +241,7 @@ evidence and did not recognise it as a bug.
 - [x] run viewer
 - [x] first runs on free tiers
 - [x] 3 runs each on Claude Haiku, Sonnet and Opus 5.5: recall 73% / 80% / 100%, precision 100%
+- [x] 5 harder bugs (search, sort, checkout, order page); same 3 models: 87% / 57% / 100%
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split

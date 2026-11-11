@@ -118,3 +118,40 @@ form {
   color: #59636e;
   font-size: 14px;
 }
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+button.toggle {
+  background: #fff;
+  color: #0b5cad;
+  margin-left: 6px;
+}
+
+button.toggle[aria-pressed="true"] {
+  background: #0b5cad;
+  color: #fff;
+}
+
+.button {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: #0b5cad;
+  color: #fff;
+  text-decoration: none;
+}
+
+.muted {
+  color: #59636e;
+}
+
+.num {
+  text-align: right;
+}
