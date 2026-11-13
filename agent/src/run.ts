@@ -100,7 +100,7 @@ await mcp.close();
 const { messages, ...report } = result;
 writeFileSync(
   path.join(runDir, "report.json"),
-  JSON.stringify({ effort, prompt, coverageGate, spec: specFile ? path.basename(specFile) : undefined, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
+  JSON.stringify({ effort, maxSteps, maxCostUsd, prompt, coverageGate, spec: specFile ? path.basename(specFile) : undefined, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
 );
 writeFileSync(path.join(runDir, "transcript.json"), JSON.stringify(messages, null, 2));
 

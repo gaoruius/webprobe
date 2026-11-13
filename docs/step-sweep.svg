@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 300" width="560" height="300" font-family="system-ui, sans-serif" font-size="12">
+  <style>
+    .bg { fill: #ffffff } .ink { fill: #1f2328 } .muted { fill: #656d76 } .grid { stroke: #e1e4e8 }
+    .line { stroke: #3b5bdb; fill: none; stroke-width: 2.5 } .dot { fill: #3b5bdb }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117 } .ink { fill: #e6edf3 } .muted { fill: #8d96a0 } .grid { stroke: #30363d }
+      .line { stroke: #7c95f5 } .dot { fill: #7c95f5 }
+    }
+  </style>
+  <rect class="bg" width="560" height="300" rx="8"/>
+  <text class="ink" x="56" y="24" font-weight="600" font-size="13">claude-haiku-5-5 + spec: recall vs. step budget (3 runs each)</text>
+  <line class="grid" x1="56" x2="520" y1="248" y2="248"/>
+  <text class="muted" x="48" y="252" text-anchor="end">0%</text>
+  <line class="grid" x1="56" x2="520" y1="202" y2="202"/>
+  <text class="muted" x="48" y="206" text-anchor="end">25%</text>
+  <line class="grid" x1="56" x2="520" y1="156" y2="156"/>
+  <text class="muted" x="48" y="160" text-anchor="end">50%</text>
+  <line class="grid" x1="56" x2="520" y1="110" y2="110"/>
+  <text class="muted" x="48" y="114" text-anchor="end">75%</text>
+  <line class="grid" x1="56" x2="520" y1="64" y2="64"/>
+  <text class="muted" x="48" y="68" text-anchor="end">100%</text>
+  <path class="line" d="M104.8,186.7 L165.9,135.6 L226.9,115.1 L349.1,64.0 L471.2,64.0"/>
+  <circle class="dot" cx="104.84210526315789" cy="186.66666666666669" r="4.5"/>
+  <text class="ink" x="104.84210526315789" y="176.66666666666669" text-anchor="middle" font-weight="600">33%</text>
+  <text class="muted" x="104.84210526315789" y="266" text-anchor="middle">20</text>
+  <text class="muted" x="104.84210526315789" y="280" text-anchor="middle" font-size="10">used 18</text>
+  <circle class="dot" cx="165.89473684210526" cy="135.55555555555554" r="4.5"/>
+  <text class="ink" x="165.89473684210526" y="125.55555555555554" text-anchor="middle" font-weight="600">61%</text>
+  <text class="muted" x="165.89473684210526" y="266" text-anchor="middle">30</text>
+  <text class="muted" x="165.89473684210526" y="280" text-anchor="middle" font-size="10">used 28</text>
+  <circle class="dot" cx="226.94736842105263" cy="115.11111111111111" r="4.5"/>
+  <text class="ink" x="226.94736842105263" y="105.11111111111111" text-anchor="middle" font-weight="600">72%</text>
+  <text class="muted" x="226.94736842105263" y="266" text-anchor="middle">40</text>
+  <text class="muted" x="226.94736842105263" y="280" text-anchor="middle" font-size="10">used 38–39</text>
+  <circle class="dot" cx="349.05263157894734" cy="64" r="4.5"/>
+  <text class="ink" x="349.05263157894734" y="54" text-anchor="middle" font-weight="600">100%</text>
+  <text class="muted" x="349.05263157894734" y="266" text-anchor="middle">60</text>
+  <text class="muted" x="349.05263157894734" y="280" text-anchor="middle" font-size="10">used 43–56</text>
+  <circle class="dot" cx="471.1578947368421" cy="64" r="4.5"/>
+  <text class="ink" x="471.1578947368421" y="54" text-anchor="middle" font-weight="600">100%</text>
+  <text class="muted" x="471.1578947368421" y="266" text-anchor="middle">80</text>
+  <text class="muted" x="471.1578947368421" y="280" text-anchor="middle" font-size="10">used 50–56</text>
+  <text class="muted" x="288" y="294" text-anchor="middle">step budget (steps actually used below)</text>
+</svg>

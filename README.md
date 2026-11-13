@@ -57,6 +57,7 @@ cd agent && npm install && npm start
 # 4. score runs
 npm run eval -- runs/<dir> runs/<dir> ...           # recall, precision, false positives
 npm test                                           # tests for the scorer and page tracking
+npm run sweep -- --spec                            # recall and cost by step budget (--out chart.svg)
 
 # 5. turn a run's bug reports into Playwright regression tests
 #    needs the clean site too:  cd buggyshop && npm run dev:clean-side   (http://localhost:3002)
@@ -197,6 +198,24 @@ Haiku 5.5, 3 runs per row:
 - Together, Haiku found all 12 bugs in all 3 runs. The spec works as an answer key for rules and
   as a checklist that keeps the agent going, which is the depth the Sonnet experiments showed was
   missing.
+
+**How many steps?** The 40-step default was a first guess, not a tuned number. A sweep with the
+spec (Haiku, 3 runs per budget, `npm run sweep -- --spec --out ../docs/step-sweep.svg`):
+
+![Recall against step budget](docs/step-sweep.svg)
+
+| budget | recall | steps used | cost / run |
+|---|---|---|---|
+| 20 | 33% | 18 | $0.006 |
+| 30 | 61% | 28 | $0.012 |
+| 40 | 72% | 38–39 | $0.020 |
+| 60 | 100% | 43–56 | $0.030 |
+| 80 | 100% | 50–56 | $0.030 |
+
+Up to 40 the budget is the limit: every run uses all of it. From 60 the agent stops by itself
+at 43–56 steps, so a bigger budget buys nothing. With a spec, about 60 steps is the knee; without
+one, Haiku stops at about 35 whatever the budget, so 40 is enough. The budget that fits depends on
+how much the agent is asked to check.
 
 Caveats: the spec describes most features, so it also spells out behavior for several seeded
 bugs (case-insensitive search, for one). Spec runs filed more duplicates (1–5 a run, reporting
@@ -364,6 +383,7 @@ every change for free, in about 10 seconds for all nine.
 - [x] regression tests from bug reports, judged on the clean site: 80% valid
 - [x] promoted into a regression suite that CI runs on every push
 - [x] product spec mode: Haiku with spec and 60 steps finds 12/12 (3/3 runs)
+- [x] step-budget sweep (20–80): the knee is about 60 with a spec
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
