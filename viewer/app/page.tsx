@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { RecallBar, StopBadge } from "@/components/ui";
 import { duration, pct, usd, when } from "@/lib/format";
-import { listRuns, RUNS_DIR, summarizeByModel } from "@/lib/runs";
+import { HIT_BUDGET_WARN, listRuns, RUNS_DIR, summarizeByModel } from "@/lib/runs";
 
 // Runs land on disk while the viewer is open; read them on every request.
 export const dynamic = "force-dynamic";
@@ -28,7 +28,8 @@ export default function Home() {
         <h1>Models</h1>
         <p className="lede">
           Recall is the share of live seeded bugs a run found; precision is the share of its reports that match a
-          seeded bug. Runs that crashed on their first step are left out.
+          seeded bug. Runs that crashed on their first step are left out. <em>Hit budget</em> counts runs that used their
+          whole step budget; above {Math.round(HIT_BUDGET_WARN * 100)}% the budget is too small for the job.
         </p>
         <div className="table-wrap">
           <table>
@@ -41,6 +42,7 @@ export default function Home() {
                 <th className="num">Precision</th>
                 <th className="num">False pos. / run</th>
                 <th className="num">Avg steps</th>
+                <th className="num" title="Runs that used their whole step budget">Hit budget</th>
                 <th className="num">Total cost</th>
               </tr>
             </thead>
@@ -59,6 +61,15 @@ export default function Home() {
                   <td className="num">{pct(m.precision)}</td>
                   <td className="num">{m.falsePositivesPerRun.toFixed(1)}</td>
                   <td className="num">{Math.round(m.avgSteps)}</td>
+                  <td className="num">
+                    {m.hitBudget / m.runs > HIT_BUDGET_WARN ? (
+                      <span className="badge badge-bad" title="Budget too small for the job: raise it or split the run">
+                        {m.hitBudget}/{m.runs}
+                      </span>
+                    ) : (
+                      `${m.hitBudget}/${m.runs}`
+                    )}
+                  </td>
                   <td className="num">{usd(m.costUsd)}</td>
                 </tr>
               ))}

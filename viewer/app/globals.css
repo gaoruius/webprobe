@@ -503,3 +503,12 @@ pre {
   max-height: 480px;
   overflow-y: auto;
 }
+
+.callout-warn {
+  background: var(--warn-bg);
+  border-color: transparent;
+}
+
+td.wrap {
+  white-space: normal;
+}

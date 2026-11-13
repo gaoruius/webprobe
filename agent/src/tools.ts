@@ -20,6 +20,16 @@ export type BugReport = z.infer<typeof BugReport>;
 
 export const Finish = z.object({ summary: z.string() });
 
+// With a spec, finish also accounts for every rule in it: the coverage report.
+export const SPEC_RESULTS = ["pass", "fail", "not tested"] as const;
+export const SpecCheck = z.object({
+  page: z.string(),
+  rule: z.string().min(1),
+  result: z.enum(SPEC_RESULTS),
+});
+export type SpecCheck = z.infer<typeof SpecCheck>;
+export const FinishWithChecks = Finish.extend({ checks: z.array(SpecCheck) });
+
 // strict: true makes the API guarantee the input matches the schema (Claude supports this;
 // Gemini ignores it). We still parse with zod before using it, because the schema is the
 // contract and the check costs nothing.
@@ -61,3 +71,34 @@ export const localTools: ToolDef[] = [
     },
   },
 ];
+
+// The finish tool for runs with a spec: one entry per spec rule, tested or not.
+export const specFinishTool: ToolDef = {
+  name: "finish",
+  description:
+    "Call when you have explored the site and filed every bug you found. List every rule in the " +
+    "spec with what you found: pass, fail (you filed a bug), or not tested. Say not tested for " +
+    "anything you did not actually try in the browser.",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["summary", "checks"],
+    properties: {
+      summary: { type: "string", description: "What you covered, and anything you could not test" },
+      checks: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["page", "rule", "result"],
+          properties: {
+            page: { type: "string", description: "Path the rule is about, e.g. /cart" },
+            rule: { type: "string", description: "The rule, briefly, in the spec's words" },
+            result: { type: "string", enum: [...SPEC_RESULTS] },
+          },
+        },
+      },
+    },
+  },
+};

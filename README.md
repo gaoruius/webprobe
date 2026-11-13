@@ -217,6 +217,22 @@ at 43–56 steps, so a bigger budget buys nothing. With a spec, about 60 steps i
 one, Haiku stops at about 35 whatever the budget, so 40 is enough. The budget that fits depends on
 how much the agent is asked to check.
 
+**Watching the budget in use.** A fixed number goes stale as the app grows, so the viewer shows,
+per model and setting, how many runs used their whole step budget ("Hit budget"; a run counts
+once it reaches the 3-steps-left warning). Above 20% it turns red: raise the budget or split the
+run by area. On the data so far it is 3/3 with the spec at 20–40 steps and 0/3 at 60–80, which
+is the sweep's knee, and 2/3 for Opus and Haiku on the 10-bug site at 40, which was tight already.
+
+**Spec coverage.** With a spec, `finish` has to account for every rule: pass, fail or not tested.
+The loop checks each claim against the pages the agent opened, so "pass" on a page it never
+visited is flagged; the viewer shows the table per run. In 5 runs (Haiku, spec), each listed 23–27
+rules and none claimed a page it hadn't opened. Both 40-step runs missed the signup bug, and both
+reports said the two signup rules were "not tested": the report shows where the budget ran out.
+The count of rules differs by run because the agent splits the spec itself; numbered rules in
+the spec would make coverage comparable across runs. (Those two 40-step runs found 11 of 12;
+the earlier three found 72% on average. Two runs aren't enough to say the new finish
+instruction is why.)
+
 Caveats: the spec describes most features, so it also spells out behavior for several seeded
 bugs (case-insensitive search, for one). Spec runs filed more duplicates (1–5 a run, reporting
 each sort direction or coupon case separately). Two no-spec 60-step runs died on a network error
@@ -384,6 +400,7 @@ every change for free, in about 10 seconds for all nine.
 - [x] promoted into a regression suite that CI runs on every push
 - [x] product spec mode: Haiku with spec and 60 steps finds 12/12 (3/3 runs)
 - [x] step-budget sweep (20–80): the knee is about 60 with a spec
+- [x] budget-hit rate in the viewer; spec coverage report checked against the trace
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split

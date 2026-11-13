@@ -12,7 +12,8 @@ import { claude } from "./providers/claude.js";
 import { gemini } from "./providers/gemini.js";
 import { groq } from "./providers/groq.js";
 import type { Effort, Provider, ProviderOptions, ToolDef, ToolResult, ToolUse, Usage } from "./providers/types.js";
-import { BugReport, Finish, localTools } from "./tools.js";
+import { pageMatches } from "./eval.js";
+import { BugReport, Finish, FinishWithChecks, localTools, specFinishTool, type SpecCheck } from "./tools.js";
 
 export const PROVIDERS = { claude, gemini, groq } as const;
 export type ProviderName = keyof typeof PROVIDERS;
@@ -42,6 +43,10 @@ export type AgentOptions = {
 const HARNESS_ONLY_TOOLS = new Set(["screenshot"]);
 
 export type FiledBug = BugReport & { screenshot?: string };
+
+// A spec rule as the agent accounted for it at finish, checked against the pages it really
+// opened: a rule it says it tested on a page it never visited is marked pageOpened: false.
+export type CheckedRule = SpecCheck & { pageOpened: boolean };
 
 // After the step budget runs out, the model gets this many extra turns in which only
 // report_bug and finish work. Without it, a model that explores until the last step
@@ -83,6 +88,7 @@ export type AgentResult = {
   usage: Usage;
   costUsd: number;
   toolCalls: ToolCall[];
+  specChecks?: CheckedRule[];
   // Same-site pages the agent opened, and ones it saw linked but never opened.
   pages: { visited: string[]; unvisited: string[] };
   messages: unknown;
@@ -100,7 +106,7 @@ You can only reach ${target}. Element refs change whenever the page updates, so 
 
 const specNote = (spec: string) => `
 
-The product team wrote this spec of how the app should behave. Check each rule in it, and report any place where the app does something different as a bug, even if nothing on the page says the rule. Keep exploring beyond it too: the spec doesn't list everything that can go wrong.
+The product team wrote this spec of how the app should behave. Check each rule in it, and report any place where the app does something different as a bug, even if nothing on the page says the rule. Keep exploring beyond it too: the spec doesn't list everything that can go wrong. When you finish, account for every rule in the spec.
 
 <spec>
 ${spec}
@@ -124,7 +130,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     model: opts.model,
     system: systemPrompt(opts.target, opts.prompt ?? "default", opts.maxSteps, opts.spec),
     firstMessage: `Test ${opts.target} and report every bug you find.`,
-    tools: [...browserTools, ...localTools],
+    tools: [...browserTools, ...(opts.spec ? [localTools[0], specFinishTool] : localTools)],
     effort: opts.effort,
   };
   const model: Provider = PROVIDERS[opts.provider](providerOptions);
@@ -151,6 +157,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const linked = new Set<string>();
   const unvisited = () => [...linked].filter((p) => !visited.has(p));
   let gateRefusals = 0;
+  let specChecks: CheckedRule[] | undefined;
 
   // A screenshot of the page as it is when the bug is filed. Best effort: a report without
   // one is still a report.
@@ -195,6 +202,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       }
       const parsed = Finish.safeParse(use.input);
       summary = parsed.success ? parsed.data.summary : "";
+      const withChecks = opts.spec ? FinishWithChecks.safeParse(use.input) : undefined;
+      if (withChecks?.success) {
+        specChecks = withChecks.data.checks.map((c) => ({
+          ...c,
+          pageOpened: [...visited].some((p) => pageMatches(p, c.page) || pageMatches(c.page, p)),
+        }));
+      }
       finished = true;
       return { use, output: "Done.", isError: false };
     }
@@ -279,6 +293,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
     costUsd: cost(),
     toolCalls,
     pages: { visited: [...visited].sort(), unvisited: unvisited().sort() },
+    specChecks,
     messages: model.history(),
   };
 }

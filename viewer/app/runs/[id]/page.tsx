@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Stat, StopBadge, RecallBar } from "@/components/ui";
 import { brief, duration, pageOf, tokens, usd, when } from "@/lib/format";
-import { getRun, truth, type FiledBug, type RegressionTest, type ToolCall } from "@/lib/runs";
+import { getRun, hitBudget, truth, type FiledBug, type RegressionTest, type SpecCheckResult, type ToolCall } from "@/lib/runs";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           value={<RecallBar recall={run.score.recall} found={run.score.found.length} live={run.score.live.length} />}
         />
         <Stat label="Reports" value={run.bugs.length} />
-        <Stat label="Steps" value={run.steps} />
+        <Stat label="Steps" value={run.maxSteps ? `${run.steps} / ${run.maxSteps}` : run.steps} />
         <Stat label="Time" value={duration(run.seconds)} />
         <Stat label="Cost" value={usd(run.costUsd)} />
         <Stat label="Tokens in / out" value={`${tokens(run.usage.input + run.usage.cacheRead)} / ${tokens(run.usage.output)}`} />
@@ -54,6 +54,12 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
       {run.error && (
         <p className="callout callout-bad">
           <strong>Run failed:</strong> {run.error}
+        </p>
+      )}
+      {hitBudget(run) && run.stoppedBecause !== "error" && (
+        <p className="callout callout-warn">
+          <strong>Used its whole step budget.</strong> The agent may have stopped before it was done; if most runs of
+          this kind do, raise the budget or split the run.
         </p>
       )}
       {run.summary && (
@@ -94,6 +100,8 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           </ul>
         )}
       </section>
+
+      {run.specChecks && <SpecCoverage checks={run.specChecks} />}
 
       <section>
         <h2>Reports ({run.bugs.length})</h2>
@@ -225,5 +233,63 @@ function TestPanel({ test }: { test: RegressionTest }) {
       </summary>
       {test.code && <pre>{test.code}</pre>}
     </details>
+  );
+}
+
+const RESULT_TONE: Record<SpecCheckResult["result"], string> = {
+  pass: "badge-good",
+  fail: "badge-bad",
+  "not tested": "badge-neutral",
+};
+
+// The agent's own account of each spec rule. Its claims are checked against the pages it opened:
+// "pass" on a page it never visited can't be true.
+function SpecCoverage({ checks }: { checks: SpecCheckResult[] }) {
+  const tested = checks.filter((c) => c.result !== "not tested");
+  const doubtful = tested.filter((c) => !c.pageOpened);
+  return (
+    <section>
+      <h2>Spec coverage</h2>
+      <p className="lede">
+        {tested.length} of {checks.length} rules tested, by the agent&apos;s account.{" "}
+        {doubtful.length > 0
+          ? `${doubtful.length} of those are on pages it never opened, so they can't have been tested.`
+          : "Every rule it says it tested is on a page it opened."}
+      </p>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Page</th>
+              <th>Rule</th>
+              <th>Result</th>
+              <th>Page opened</th>
+            </tr>
+          </thead>
+          <tbody>
+            {checks.map((c, i) => (
+              <tr key={i}>
+                <td>
+                  <code className="small">{c.page}</code>
+                </td>
+                <td className="wrap">{c.rule}</td>
+                <td>
+                  <span className={`badge ${RESULT_TONE[c.result]}`}>{c.result}</span>
+                </td>
+                <td>
+                  {c.pageOpened ? (
+                    "yes"
+                  ) : c.result === "not tested" ? (
+                    <span className="muted">no</span>
+                  ) : (
+                    <span className="badge badge-bad">no: claim not backed by the trace</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

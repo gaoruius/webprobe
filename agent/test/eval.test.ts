@@ -52,6 +52,7 @@ test("pageMatches: * and route parameters match one segment", () => {
   assert.ok(pageMatches("/product/notebook", "/product/*"));
   assert.ok(pageMatches("/product/[id]", "/product/*"));
   assert.ok(pageMatches("/product/:slug", "/product/mug"));
+  assert.ok(pageMatches("/product/<id>", "/product/lamp"));
   assert.ok(!pageMatches("/product", "/product/*"));
   assert.ok(!pageMatches("/cart", "/product/*"));
 });

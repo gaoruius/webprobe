@@ -15,6 +15,16 @@ export type ToolCall = { step: number; name: string; input: unknown; isError: bo
 
 export type FiledBug = BugReport & { screenshot?: string };
 
+// A spec rule as the agent accounted for it at finish; pageOpened is checked against its trace.
+export type SpecCheckResult = { page: string; rule: string; result: "pass" | "fail" | "not tested"; pageOpened: boolean };
+
+// The agent is told when 3 steps are left, so a run that got that far used its whole budget.
+export const hitBudget = (r: Run) =>
+  r.stoppedBecause === "max_steps" || (r.maxSteps !== undefined && r.steps >= r.maxSteps - 3);
+
+// Above this share of runs hitting the budget, the budget is too small for the job.
+export const HIT_BUDGET_WARN = 0.2;
+
 // Regression tests written by `npm run gen-tests` (agent/src/gen-tests.ts), one per bug.
 export type RegressionTest = {
   bug: number;
@@ -34,6 +44,8 @@ export type Run = {
   prompt?: string;
   coverageGate?: boolean;
   spec?: string;
+  maxSteps?: number;
+  specChecks?: SpecCheckResult[];
   target?: string;
   liveBugs: string;
   seconds?: number;
@@ -123,6 +135,8 @@ export type ModelSummary = {
   precision: number | null;
   falsePositivesPerRun: number;
   avgSteps: number;
+  // Runs that used their whole step budget, out of `runs`.
+  hitBudget: number;
   costUsd: number;
 };
 
@@ -135,7 +149,8 @@ const siteOf = (r: Run) =>
   (r.score.live.length ? `${r.score.live.length} bugs` : "clean site") +
   (r.prompt && r.prompt !== "default" ? `, ${r.prompt} prompt` : "") +
   (r.coverageGate ? ", coverage gate" : "") +
-  (r.spec ? ", with spec" : "");
+  (r.spec ? ", with spec" : "") +
+  (r.maxSteps !== undefined ? `, ${r.maxSteps} steps` : "");
 
 // One row per provider/model and set of live bugs, since recall on 5 bugs and on 10 don't average. Runs that crashed before doing anything are left out:
 // they say nothing about the model.
@@ -156,6 +171,7 @@ export function summarizeByModel(runs: Run[]): ModelSummary[] {
     precision: mean(rs.map((r) => r.score.precision)),
     falsePositivesPerRun: rs.reduce((a, r) => a + r.score.falsePositives.length, 0) / rs.length,
     avgSteps: rs.reduce((a, r) => a + r.steps, 0) / rs.length,
+    hitBudget: rs.filter(hitBudget).length,
     costUsd: rs.reduce((a, r) => a + r.costUsd, 0),
   }))
     .sort((a, b) => (parseInt(b.site) || 0) - (parseInt(a.site) || 0));

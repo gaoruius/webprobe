@@ -36,7 +36,8 @@ export type Score = {
 export function normalizePage(page: string): string {
   let p = page.trim();
   try {
-    p = new URL(p, "http://x").pathname;
+    // decodeURI undoes the escaping URL adds, so "<id>" stays a wildcard.
+    p = decodeURI(new URL(p, "http://x").pathname);
   } catch {
     // Not a URL or a path we can parse; compare it as written.
   }
@@ -44,8 +45,8 @@ export function normalizePage(page: string): string {
 }
 
 // A path segment that stands for any value: "*" in the manifest, or a route parameter
-// such as "[id]" or ":id", which is how agents often write "every product page".
-const WILDCARD = /^(\*|\[[^\]]+\]|:.+)$/;
+// such as "[id]", ":id" or "<id>", which is how agents (and SPEC.md) write "every product page".
+const WILDCARD = /^(\*|\[[^\]]+\]|:.+|<[^>]+>)$/;
 
 export function pageMatches(reported: string, truth: string): boolean {
   const a = normalizePage(reported).split("/");
