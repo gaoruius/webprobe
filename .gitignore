@@ -7,3 +7,6 @@ agent/runs/
 .next-clean/
 agent/test-results/
 agent/playwright-report/
+.next-test-*/
+buggyshop/test-results/
+buggyshop/playwright-report/

@@ -34,12 +34,14 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    ".next-clean/types/**/*.ts",
-    ".next-clean/dev/types/**/*.ts",
-    ".next-one/types/**/*.ts",
-    ".next-one/dev/types/**/*.ts"
+    ".next-test-clean/types/**/*.ts",
+    ".next-test-clean/dev/types/**/*.ts",
+    ".next-test-bugs/types/**/*.ts",
+    ".next-test-bugs/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "tests",
+    "playwright.config.ts"
   ]
 }

@@ -8,7 +8,8 @@
     "eval": "tsx src/eval.ts",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "gen-tests": "tsx --env-file-if-exists=.env src/gen-tests.ts"
+    "gen-tests": "tsx --env-file-if-exists=.env src/gen-tests.ts",
+    "promote-tests": "tsx src/promote-tests.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",

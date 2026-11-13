@@ -58,6 +58,11 @@ npm test                                           # tests for the scorer and pa
 # 5. turn a run's bug reports into Playwright regression tests
 #    needs the clean site too:  cd buggyshop && npm run dev:clean-side   (http://localhost:3002)
 npm run gen-tests -- runs/<dir>                     # writes runs/<dir>/tests/; model: claude-haiku-5-5
+npm run promote-tests -- runs/<dir> ...            # copies valid ones to buggyshop/tests/regression/
+
+# the regression suite (no API key; Playwright builds and starts its own copy of the shop)
+cd buggyshop && npm run test:regression            # clean site: all must pass
+npm run test:regression:buggy                      # all bugs on: all should fail
 
 # 6. browse runs
 cd viewer && npm install && npm run dev            # http://localhost:3001
@@ -280,6 +285,24 @@ removes. A first version of the loop sent the clean site's output back to the mo
 
 The viewer shows each test under its bug, with its status.
 
+### From a run to CI
+
+`promote-tests` copies the valid tests into `buggyshop/tests/regression/`, one file per bug
+(named by the bug the eval matched), and never overwrites a file that is already there, since
+someone may have reviewed it. That's the human step: read the diff, then commit. Nine of the ten
+bugs have a test there now; `order-link-404` never got a valid one.
+
+[CI](.github/workflows/ci.yml) runs on every push and pull request, with no API key:
+
+| job | checks |
+|---|---|
+| `agent-tests` | typecheck, scorer and page-tracking tests |
+| `regression` | the suite on a production build of the clean shop: every test passes. This is the gate. |
+| `regression-catches-bugs` | the suite with every bug on: every test fails. A test that starts passing here no longer catches its bug. |
+
+So the model is paid once, when it writes a test (about $0.002); after that the test runs on
+every change for free, in about 10 seconds for all nine.
+
 ## Roadmap
 
 - [x] BuggyShop with 5 switchable bugs + ground-truth manifest
@@ -296,6 +319,7 @@ The viewer shows each test under its bug, with its status.
 - [x] 5 harder bugs (search, sort, checkout, order page); same 3 models: 87% / 57% / 100%
 - [x] Sonnet experiments: budget prompt 67%, page-coverage gate 57% (every page opened)
 - [x] regression tests from bug reports, judged on the clean site: 80% valid
+- [x] promoted into a regression suite that CI runs on every push
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
