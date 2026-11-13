@@ -20,6 +20,20 @@ type CartContextValue = {
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
+
+// 10 or more of one product: 10% off that line. Only SPEC.md says so; no page mentions it
+// unless the discount is applied.
+export const BULK_QTY = 10;
+export const BULK_PERCENT_OFF = 10;
+
+export function bulkApplies(i: CartItem): boolean {
+  // BUG bulk-discount-missing: the bulk discount is never applied.
+  return i.qty >= BULK_QTY && !isBugOn("bulk-discount-missing");
+}
+
+export function lineTotal(i: CartItem): number {
+  return i.price * i.qty * (bulkApplies(i) ? 1 - BULK_PERCENT_OFF / 100 : 1);
+}
 const STORAGE_KEY = "buggyshop-cart";
 const DISCOUNT_KEY = "buggyshop-discount";
 
@@ -77,7 +91,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }
 
   const count = items.reduce((n, i) => n + i.shownQty, 0);
-  const total = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const total = items.reduce((sum, i) => sum + lineTotal(i), 0);
 
   return (
     <CartContext.Provider value={{ items, add, setQuantity, clear, count, total, discount, setDiscount }}>{children}</CartContext.Provider>

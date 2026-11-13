@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useCart } from "@/components/CartProvider";
+import { lineTotal, useCart } from "@/components/CartProvider";
 import { isBugOn } from "@/lib/bugs";
 import { FREE_SHIPPING_OVER, SHIPPING, saveOrder, type Order } from "@/lib/orders";
 
@@ -58,13 +58,14 @@ export default function CheckoutPage() {
       name: name.trim(),
       address: address.trim(),
       zip: zip.trim(),
-      lines: items.map((i) => ({ name: i.name, qty: i.qty, price: i.price })),
+      lines: items.map((i) => ({ name: i.name, qty: i.qty, price: i.price, total: lineTotal(i) })),
       subtotal,
       discount: discountAmount,
       shipping,
       total: grandTotal,
     });
-    clear();
+    // BUG order-cart-not-cleared: the order is placed but the cart keeps its items.
+    if (!isBugOn("order-cart-not-cleared")) clear();
     setPlaced(order);
   }
 
@@ -78,7 +79,7 @@ export default function CheckoutPage() {
               <td>
                 {i.name} × {i.qty}
               </td>
-              <td className="num">${(i.price * i.qty).toFixed(2)}</td>
+              <td className="num">${lineTotal(i).toFixed(2)}</td>
             </tr>
           ))}
           <tr>

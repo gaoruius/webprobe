@@ -38,7 +38,7 @@ export default function OrderPage() {
               <td>
                 {l.name} × {l.qty}
               </td>
-              <td className="num">${(l.price * l.qty).toFixed(2)}</td>
+              <td className="num">${(l.total ?? l.price * l.qty).toFixed(2)}</td>
             </tr>
           ))}
           <tr>

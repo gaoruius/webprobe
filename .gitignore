@@ -10,3 +10,4 @@ agent/playwright-report/
 .next-test-*/
 buggyshop/test-results/
 buggyshop/playwright-report/
+agent/runs-discarded/

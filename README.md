@@ -7,7 +7,9 @@ structured bug reports — plus an eval suite that measures how well (and how re
 > open models on Groq), the eval scorer and a run viewer all work. On the 10-bug site, Claude
 > Opus 5.5 found every bug in all 3 runs (~$0.55 a run), Haiku 5.5 found 87% for 2 cents, and
 > Sonnet 5.5 only 57% because it stops early. No false positives on the buggy site, one in two
-> runs on the clean site, and three real bugs nobody seeded ([Results](#results)).
+> runs on the clean site, and three real bugs nobody seeded. Given the product spec, Haiku found
+> all 12 bugs (including two only the spec defines) in 3 of 3 runs for 3 cents. Bug reports become
+> Playwright regression tests that CI runs on every push ([Results](#results)).
 
 ## Layout
 
@@ -49,6 +51,7 @@ cd agent && npm install && npm start
 #    budgets:  WEBPROBE_MAX_STEPS (40), WEBPROBE_MAX_COST_USD (2), WEBPROBE_EFFORT (medium)
 #    prompt:   WEBPROBE_PROMPT=budget  (tell the model its step budget; see Results)
 #    gate:     WEBPROBE_COVERAGE_GATE=1  (refuse finish while linked pages are unopened)
+#    spec:     WEBPROBE_SPEC=../buggyshop/SPEC.md  (give the agent the product spec)
 #    against the clean site, tell the eval: WEBPROBE_LIVE_BUGS=none npm start
 
 # 4. score runs
@@ -96,6 +99,14 @@ Added in v0.2, deeper in the site and needing more steps or some arithmetic to s
 | `checkout-free-shipping` | functional | /checkout | $53 of items still pays $5 shipping (checks item count, not price) |
 | `checkout-zip-unlabeled` | a11y | /checkout | ZIP code field has no accessible name |
 | `order-link-404` | network | /checkout, /order/* | "View order" after placing an order goes to a 404 |
+
+Added in v0.3, wrong only according to the product spec ([SPEC.md](buggyshop/SPEC.md)); no page
+states the rule (`spec_only` in the manifest):
+
+| id | category | page | what's wrong |
+|---|---|---|---|
+| `bulk-discount-missing` | functional | /cart | 10 or more of one product should get 10% off; nothing is taken off |
+| `order-cart-not-cleared` | functional | /checkout | after an order is placed, the cart keeps its items |
 
 A bug's `page` can be a list when it can fairly be reported from more than one page. Runs record
 the exact bugs that were live, so runs from v0.1 still score out of 5.
@@ -160,6 +171,38 @@ report but extras). Keyword matching is crude, so false positives are listed for
 check rather than trusted. The agent never sees the manifest, and BuggyShop exposes no way to read it.
 
 ## Results
+
+### v0.3: a product spec (12 bugs)
+
+An agent with no spec can only flag what contradicts the page itself or common sense: "$5
+shipping" on a page that says "free over $50," a search that misses "mug." It cannot know a rule
+that lives only in a product doc. So `WEBPROBE_SPEC` puts a spec in the system prompt, written as
+a product manager would ([SPEC.md](buggyshop/SPEC.md): features and Given/When/Then rules, not
+known bugs), and two bugs were added that only the spec makes wrong.
+
+Haiku 5.5, 3 runs per row:
+
+| | recall (mean) | `bulk-discount-missing` | `order-cart-not-cleared` | steps used | cost / run |
+|---|---|---|---|---|---|
+| no spec, 40 steps | 83% | 0/3 | 3/3 | 32–38 | $0.02 |
+| spec, 40 steps | 72% | **3/3** | 0/3 | 38–39 | $0.02 |
+| no spec, 60 steps | 75% | 0/3 | 2/3 | 33–35 | $0.02 |
+| **spec, 60 steps** | **100%** | **3/3** | **3/3** | 43–56 | $0.03 |
+
+- The spec-only bug is found only with the spec, every time, as expected.
+- With the spec but the same 40 steps, recall *fell*: Haiku checked each rule more carefully
+  (both sort directions, valid and invalid coupons, a quantity of 10) and ran out of steps before
+  it placed an order or opened the signup page.
+- More steps alone don't help: without a spec, Haiku stops by itself at about 35 of 60.
+- Together, Haiku found all 12 bugs in all 3 runs. The spec works as an answer key for rules and
+  as a checklist that keeps the agent going, which is the depth the Sonnet experiments showed was
+  missing.
+
+Caveats: the spec describes most features, so it also spells out behavior for several seeded
+bugs (case-insensitive search, for one). Spec runs filed more duplicates (1–5 a run, reporting
+each sort direction or coupon case separately). Two no-spec 60-step runs died on a network error
+to the API and were rerun.
+
 
 ### v0.2: 10 bugs
 
@@ -320,6 +363,7 @@ every change for free, in about 10 seconds for all nine.
 - [x] Sonnet experiments: budget prompt 67%, page-coverage gate 57% (every page opened)
 - [x] regression tests from bug reports, judged on the clean site: 80% valid
 - [x] promoted into a regression suite that CI runs on every push
+- [x] product spec mode: Haiku with spec and 60 steps finds 12/12 (3/3 runs)
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split

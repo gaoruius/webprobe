@@ -184,3 +184,15 @@ test("no reports: recall 0, precision undefined", () => {
   assert.equal(s.recall, 0);
   assert.equal(s.precision, null);
 });
+
+test("spec-only bugs: a bulk-discount report and a cart-not-cleared report each find their own bug", () => {
+  const s = score(
+    [
+      report({ title: "No bulk discount for 10 or more of the same product", page: "/cart", category: "functional", actual: "10 mugs cost $140.00" }),
+      report({ title: "Cart still has items after placing an order", page: "/checkout", category: "functional", actual: "Header shows Cart (2) instead of Cart (0)" }),
+      zeroQty,
+    ],
+    liveBugs(truth, "all"),
+  );
+  assert.deepEqual(s.found.map((f) => f.id), ["bulk-discount-missing", "order-cart-not-cleared", "cart-zero-qty"]);
+});

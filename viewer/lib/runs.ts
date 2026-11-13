@@ -33,6 +33,7 @@ export type Run = {
   effort?: string;
   prompt?: string;
   coverageGate?: boolean;
+  spec?: string;
   target?: string;
   liveBugs: string;
   seconds?: number;
@@ -133,7 +134,8 @@ const mean = (xs: (number | null)[]) => {
 const siteOf = (r: Run) =>
   (r.score.live.length ? `${r.score.live.length} bugs` : "clean site") +
   (r.prompt && r.prompt !== "default" ? `, ${r.prompt} prompt` : "") +
-  (r.coverageGate ? ", coverage gate" : "");
+  (r.coverageGate ? ", coverage gate" : "") +
+  (r.spec ? ", with spec" : "");
 
 // One row per provider/model and set of live bugs, since recall on 5 bugs and on 10 don't average. Runs that crashed before doing anything are left out:
 // they say nothing about the model.

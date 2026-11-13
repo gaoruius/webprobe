@@ -5,7 +5,7 @@ export type Order = {
   name: string;
   address: string;
   zip: string;
-  lines: { name: string; qty: number; price: number }[];
+  lines: { name: string; qty: number; price: number; total?: number }[];
   subtotal: number;
   discount: number;
   shipping: number;

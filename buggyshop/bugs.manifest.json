@@ -1,5 +1,5 @@
 {
-  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file. `match` is a case-insensitive regex the eval runs over a report's title, actual and evidence; a report counts as finding a bug when its page is the bug's page, or one of them when `page` is a list (`*` matches any one path segment), and `match` hits.",
+  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file. `match` is a case-insensitive regex the eval runs over a report's title, actual and evidence; a report counts as finding a bug when its page is the bug's page, or one of them when `page` is a list (`*` matches any one path segment), and `match` hits. `spec_only` marks bugs that only SPEC.md, not the site, says are wrong.",
   "bugs": [
     {
       "id": "cart-zero-qty",
@@ -104,6 +104,36 @@
       "expected": "The link opens the order.",
       "how_to_trigger": "Place an order on /checkout, click 'View order #1001'.",
       "match": "404|not found|view order|order (link|page|details)"
+    },
+    {
+      "id": "bulk-discount-missing",
+      "category": "functional",
+      "severity": "major",
+      "page": [
+        "/cart",
+        "/checkout"
+      ],
+      "spec_only": true,
+      "summary": "10 or more of one product should get 10% off that line (SPEC.md); no discount is applied.",
+      "expected": "With 10 mugs, the mug line is $126.00, not $140.00, and the cart mentions the bulk discount.",
+      "how_to_trigger": "Set a product's quantity to 10 in /cart.",
+      "match": "bulk|volume|quantity discount|10 or more|ten or more|10\\+ (items|of)|10% off (the|that|a) (line|product|item)"
+    },
+    {
+      "id": "order-cart-not-cleared",
+      "category": "functional",
+      "severity": "major",
+      "page": [
+        "/checkout",
+        "/cart",
+        "/",
+        "/orders/*"
+      ],
+      "spec_only": true,
+      "summary": "After placing an order, the cart keeps its items (SPEC.md says it should be empty).",
+      "expected": "After 'Place order', the header shows Cart (0) and /cart is empty.",
+      "how_to_trigger": "Place an order on /checkout, then look at the header or /cart.",
+      "match": "(order|checkout|purchase)[^\\n]*(cart|items)[^\\n]*(not|still|remain|clear|empty)|(cart|items)[^\\n]*(not|still|remain)[^\\n]*(clear|empt|after)[^\\n]*(order|checkout|purchase)"
     }
   ],
   "extras_description": "Real defects that were not seeded: an agent reported them and a person confirmed them in the code. Matched on a report's page and title only, since evidence often shows other problems on the same page. A matching report counts as correct for precision; extras are not part of recall, which is about the seeded bugs.",

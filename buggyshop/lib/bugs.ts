@@ -17,6 +17,8 @@ export const BUG_IDS = [
   "checkout-free-shipping",
   "checkout-zip-unlabeled",
   "order-link-404",
+  "bulk-discount-missing",
+  "order-cart-not-cleared",
 ] as const;
 
 export type BugId = (typeof BUG_IDS)[number];

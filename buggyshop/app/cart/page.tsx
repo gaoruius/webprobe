@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useCart } from "@/components/CartProvider";
+import { BULK_PERCENT_OFF, bulkApplies, useCart } from "@/components/CartProvider";
 import { isBugOn } from "@/lib/bugs";
 
 export default function CartPage() {
@@ -57,7 +57,10 @@ export default function CartPage() {
         <tbody>
           {items.map((i) => (
             <tr key={i.id}>
-              <td>{i.name}</td>
+              <td>
+                {i.name}
+                {bulkApplies(i) && <span className="muted"> · {BULK_PERCENT_OFF}% bulk discount</span>}
+              </td>
               <td>${i.price}</td>
               <td>
                 <input

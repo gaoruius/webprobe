@@ -29,6 +29,9 @@ export type AgentOptions = {
   prompt?: PromptVariant;
   // Refuse `finish` while pages linked from visited pages are still unopened and steps remain.
   coverageGate?: boolean;
+  // A product spec (markdown). Without one the agent can only flag what contradicts the page
+  // itself or common sense; with one it can check rules no page states.
+  spec?: string;
   // Where to save a screenshot for each filed bug. Leave out to skip screenshots.
   screenshotDir?: string;
   log?: (line: string) => void;
@@ -87,13 +90,21 @@ export type AgentResult = {
 
 export type PromptVariant = "default" | "budget";
 
-const systemPrompt = (target: string, variant: PromptVariant, maxSteps: number) => `You are a QA engineer testing the web app at ${target}.
+const systemPrompt = (target: string, variant: PromptVariant, maxSteps: number, spec?: string) => `You are a QA engineer testing the web app at ${target}.
 
 Explore it the way a careful tester would: visit every page you can reach, use the main flows end to end, and try edge cases (empty, zero, negative and malformed input). After each action, check what the page shows, and check console_errors and network_errors: some bugs are only visible there.
 
 When you confirm a bug, file it right away with report_bug. Report only what you observed through the tools, one report per distinct bug. When you have covered the site, call finish.
 
-You can only reach ${target}. Element refs change whenever the page updates, so take a new snapshot before clicking or typing on a changed page.${variant === "budget" ? budgetNote(maxSteps) : ""}`;
+You can only reach ${target}. Element refs change whenever the page updates, so take a new snapshot before clicking or typing on a changed page.${variant === "budget" ? budgetNote(maxSteps) : ""}${spec ? specNote(spec) : ""}`;
+
+const specNote = (spec: string) => `
+
+The product team wrote this spec of how the app should behave. Check each rule in it, and report any place where the app does something different as a bug, even if nothing on the page says the rule. Keep exploring beyond it too: the spec doesn't list everything that can go wrong.
+
+<spec>
+${spec}
+</spec>`;
 
 const budgetNote = (maxSteps: number) => `
 
@@ -111,7 +122,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
   const providerOptions: ProviderOptions = {
     model: opts.model,
-    system: systemPrompt(opts.target, opts.prompt ?? "default", opts.maxSteps),
+    system: systemPrompt(opts.target, opts.prompt ?? "default", opts.maxSteps, opts.spec),
     firstMessage: `Test ${opts.target} and report every bug you find.`,
     tools: [...browserTools, ...localTools],
     effort: opts.effort,
