@@ -12,7 +12,7 @@ import { claude } from "./providers/claude.js";
 import { gemini } from "./providers/gemini.js";
 import { groq } from "./providers/groq.js";
 import type { Effort, Provider, ProviderOptions, ToolDef, ToolResult, ToolUse, Usage } from "./providers/types.js";
-import { pageMatches } from "./eval.js";
+import { normalizePage, pageMatches } from "./eval.js";
 import { BugReport, Finish, FinishWithChecks, localTools, specFinishTool, type SpecCheck } from "./tools.js";
 
 export const PROVIDERS = { claude, gemini, groq } as const;
@@ -30,6 +30,9 @@ export type AgentOptions = {
   prompt?: PromptVariant;
   // Refuse `finish` while pages linked from visited pages are still unopened and steps remain.
   coverageGate?: boolean;
+  // "start-only": navigate may only open the start page, so every other page has to be reached
+  // by clicking, as a user would. Typing a URL skips the navigation a user depends on.
+  navigate?: "any" | "start-only";
   // A product spec (markdown). Without one the agent can only flag what contradicts the page
   // itself or common sense; with one it can check rules no page states.
   spec?: string;
@@ -96,13 +99,17 @@ export type AgentResult = {
 
 export type PromptVariant = "default" | "budget";
 
-const systemPrompt = (target: string, variant: PromptVariant, maxSteps: number, spec?: string) => `You are a QA engineer testing the web app at ${target}.
+const systemPrompt = (target: string, variant: PromptVariant, maxSteps: number, spec?: string, startOnly = false) => `You are a QA engineer testing the web app at ${target}.
 
 Explore it the way a careful tester would: visit every page you can reach, use the main flows end to end, and try edge cases (empty, zero, negative and malformed input). After each action, check what the page shows, and check console_errors and network_errors: some bugs are only visible there.
 
 When you confirm a bug, file it right away with report_bug. Report only what you observed through the tools, one report per distinct bug. When you have covered the site, call finish.
 
-You can only reach ${target}. Element refs change whenever the page updates, so take a new snapshot before clicking or typing on a changed page.${variant === "budget" ? budgetNote(maxSteps) : ""}${spec ? specNote(spec) : ""}`;
+You can only reach ${target}. Element refs change whenever the page updates, so take a new snapshot before clicking or typing on a changed page.${variant === "budget" ? budgetNote(maxSteps) : ""}${startOnly ? startOnlyNote(target) : ""}${spec ? specNote(spec) : ""}`;
+
+const startOnlyNote = (target: string) => `
+
+Use the site the way a person does: navigate can only open the start page, ${target}. Reach every other page by clicking links and buttons. If you can't find a way to a page, that is worth reporting.`;
 
 const specNote = (spec: string) => `
 
@@ -128,7 +135,7 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
   const providerOptions: ProviderOptions = {
     model: opts.model,
-    system: systemPrompt(opts.target, opts.prompt ?? "default", opts.maxSteps, opts.spec),
+    system: systemPrompt(opts.target, opts.prompt ?? "default", opts.maxSteps, opts.spec, opts.navigate === "start-only"),
     firstMessage: `Test ${opts.target} and report every bug you find.`,
     tools: [...browserTools, ...(opts.spec ? [localTools[0], specFinishTool] : localTools)],
     effort: opts.effort,
@@ -158,6 +165,14 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const unvisited = () => [...linked].filter((p) => !visited.has(p));
   let gateRefusals = 0;
   let specChecks: CheckedRule[] | undefined;
+  const isStartPage = (url: string) => {
+    try {
+      const u = new URL(url, opts.target);
+      return u.origin === origin && normalizePage(u.pathname) === normalizePage(new URL(opts.target).pathname);
+    } catch {
+      return false;
+    }
+  };
 
   // A screenshot of the page as it is when the bug is filed. Best effort: a report without
   // one is still a report.
@@ -211,6 +226,13 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
       }
       finished = true;
       return { use, output: "Done.", isError: false };
+    }
+    if (use.name === "navigate" && opts.navigate === "start-only" && !isStartPage(String(use.input.url ?? ""))) {
+      return {
+        use,
+        output: `navigate can only open the start page (${opts.target}). Reach other pages by clicking, as a user would.`,
+        isError: true,
+      };
     }
     // Browser tool: forward to the MCP server. It validates the input itself and
     // returns errors as isError results, which we pass straight back to the model.

@@ -45,6 +45,7 @@ export type Run = {
   coverageGate?: boolean;
   spec?: string;
   device?: string;
+  navigate?: string;
   maxSteps?: number;
   specChecks?: SpecCheckResult[];
   target?: string;
@@ -151,6 +152,7 @@ const siteOf = (r: Run) =>
   (r.prompt && r.prompt !== "default" ? `, ${r.prompt} prompt` : "") +
   (r.coverageGate ? ", coverage gate" : "") +
   (r.device ? `, ${r.device}` : "") +
+  (r.navigate === "start-only" ? ", clicks only" : "") +
   (r.spec ? ", with spec" : "") +
   (r.maxSteps !== undefined ? `, ${r.maxSteps} steps` : "");
 

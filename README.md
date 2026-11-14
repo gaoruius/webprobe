@@ -53,6 +53,7 @@ cd agent && npm install && npm start
 #    gate:     WEBPROBE_COVERAGE_GATE=1  (refuse finish while linked pages are unopened)
 #    spec:     WEBPROBE_SPEC=../buggyshop/SPEC.md  (give the agent the product spec)
 #    device:   WEBPROBE_DEVICE="Pixel 7"  (emulate a phone: size, touch, user agent; on Chromium)
+#    clicks:   WEBPROBE_NAVIGATE=start-only  (navigate opens only the start page)
 #    against the clean site, tell the eval: WEBPROBE_LIVE_BUGS=none npm start
 
 # 4. score runs
@@ -433,6 +434,23 @@ the ones you only meet by clicking your way somewhere. On the other twelve bugs 
 (desktop, same settings: 83%), with one false positive ("cart total excludes the shipping that
 checkout adds", which is how most shops work).
 
+So `WEBPROBE_NAVIGATE=start-only` makes the harness refuse `navigate` to anything but the start
+page (and the prompt says so): every other page has to be reached by clicking. Haiku, 3 runs per
+row:
+
+| | mobile cart-link bug | other 12 bugs | reached cart / checkout |
+|---|---|---|---|
+| desktop, any URL | — | 83% | yes |
+| desktop, clicks only | — | 78% | yes |
+| phone, any URL | 0/3 | 67% | yes, by typing /cart |
+| **phone, clicks only** | **3/3** | 27% | **never** |
+
+Clicking costs little on desktop. On a phone it finds the bug every time ("No way to reach cart or
+see cart count after adding items"), and then can't get past it: no run reached the cart or
+checkout, so every bug behind them went unfound. That's what a user would hit too. A blocking bug
+hides the bugs behind it, so the right next step is to fix it and test again, not to read the
+lower recall as a worse agent.
+
 The visual suite runs every page at desktop and Pixel 7 size (10 screenshots). With only the
 cart-link bug on, exactly the five phone screenshots change; with only the price bug, exactly the
 two home pages. CI checks both (`scripts/check-visual.mjs`).
@@ -459,7 +477,7 @@ two home pages. CI checks both (`scripts/check-visual.mjs`).
 - [x] budget-hit rate in the viewer; spec coverage report checked against the trace
 - [x] visual regression tests (5 pages), with a bug only a screenshot shows; in CI
 - [x] mobile web: device emulation, a phone-only bug, desktop + phone screenshots
-- [ ] let `navigate` only open the start page, so the agent has to click like a user
+- [x] `WEBPROBE_NAVIGATE=start-only`: the agent clicks like a user; finds the phone-only bug 3/3
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
