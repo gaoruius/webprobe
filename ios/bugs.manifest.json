@@ -1,0 +1,45 @@
+{
+  "description": "Ground truth for the iOS BuggyShop (ios/BuggyShop), like buggyshop/bugs.manifest.json. Each id matches a case in Bugs.swift. iOS reports name a screen, not a URL, and agents name screens loosely (\"Cart\", \"Cart screen\", \"Desk Lamp detail\"), so every page is \"*\" and the match patterns do the work.",
+  "bugs": [
+    {
+      "id": "cart-zero-qty", "category": "functional", "severity": "major", "page": "*",
+      "summary": "Setting an item's quantity to 0 with the stepper leaves it in the cart and the total unchanged.",
+      "match": "(quantity|qty|stepper)[^\\n]*\\b(0|zero)\\b|\\b(0|zero)\\b[^\\n]*(quantity|qty|item)"
+    },
+    {
+      "id": "search-case-sensitive", "category": "functional", "severity": "major", "page": "*",
+      "summary": "Search is case-sensitive: 'mug' finds nothing, 'Mug' finds the Ceramic Mug.",
+      "match": "search|case"
+    },
+    {
+      "id": "sort-price-string", "category": "functional", "severity": "major", "page": "*",
+      "summary": "Sorting by price compares prices as text: low to high gives $14, $39, $9.",
+      "match": "sort|low to high|high to low|ascending|descending"
+    },
+    {
+      "id": "signup-email-validation", "category": "validation", "severity": "major", "page": "*",
+      "summary": "Sign up accepts an invalid email such as 'not-an-email'.",
+      "match": "e-?mail"
+    },
+    {
+      "id": "checkout-free-shipping", "category": "functional", "severity": "major", "page": "*",
+      "summary": "Orders over $50 are still charged $5 shipping: the check uses the item count.",
+      "match": "shipping"
+    },
+    {
+      "id": "coupon-silent", "category": "functional", "severity": "major", "page": "*",
+      "summary": "Applying any coupon, valid or not, does nothing and shows no message.",
+      "match": "coupon|save10|welcome20|promo"
+    },
+    {
+      "id": "reviews-crash", "category": "functional", "severity": "critical", "page": "*",
+      "summary": "Opening the Reviews tab of a product with no reviews (Desk Lamp) crashes the app.",
+      "match": "crash|terminat|quits|closes|not running"
+    },
+    {
+      "id": "add-button-unlabeled", "category": "a11y", "severity": "major", "page": "*",
+      "summary": "The add-to-cart buttons in the product list have no accessibility label.",
+      "match": "label|accessib|voiceover|unnamed|no name"
+    }
+  ]
+}

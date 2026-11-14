@@ -15,8 +15,12 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { PROVIDERS, runAgent, type AgentOptions, type PromptVariant, type ProviderName } from "./agent.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const MANIFEST = path.join(here, "../../buggyshop/bugs.manifest.json");
-const target = process.env.WEBPROBE_TARGET ?? "http://localhost:3000";
+// WEBPROBE_PLATFORM=ios tests the iOS BuggyShop in the Simulator through ios-mcp instead of the
+// web shop through browser-mcp. Each has its own answer key.
+const platform = process.env.WEBPROBE_PLATFORM === "ios" ? "ios" : "web";
+const MANIFEST =
+  platform === "ios" ? path.join(here, "../../ios/bugs.manifest.json") : path.join(here, "../../buggyshop/bugs.manifest.json");
+const target = platform === "ios" ? "the BuggyShop iOS app" : (process.env.WEBPROBE_TARGET ?? "http://localhost:3000");
 // Default to whichever provider we have a key for, in this order.
 const KEY_VARS: Record<ProviderName, string> = {
   claude: "ANTHROPIC_API_KEY",
@@ -33,7 +37,7 @@ const model = process.env.WEBPROBE_MODEL || undefined;
 // NEXT_PUBLIC_BUGS BuggyShop was started with ("none" for `npm run dev:clean`).
 // The agent never sees it.
 // "all" is recorded as the explicit list, so old runs still score right after bugs are added.
-const liveBugsSetting = process.env.WEBPROBE_LIVE_BUGS ?? "all";
+const liveBugsSetting = (platform === "ios" ? process.env.WEBPROBE_IOS_BUGS : process.env.WEBPROBE_LIVE_BUGS) ?? "all";
 // The browser server reads this too (it passes through the environment) and emulates the device.
 const device = process.env.WEBPROBE_DEVICE || undefined;
 const navigate = process.env.WEBPROBE_NAVIGATE === "start-only" ? "start-only" : "any";
@@ -62,11 +66,13 @@ if (!hasKey(provider)) {
   process.exit(1);
 }
 
-try {
-  await fetch(target);
-} catch {
-  console.error(`Can't reach ${target}. Start BuggyShop first: cd buggyshop && npm run dev`);
-  process.exit(1);
+if (platform === "web") {
+  try {
+    await fetch(target);
+  } catch {
+    console.error(`Can't reach ${target}. Start BuggyShop first: cd buggyshop && npm run dev`);
+    process.exit(1);
+  }
 }
 
 // The MCP server gets our environment minus the API keys: it drives a browser and never
@@ -78,7 +84,7 @@ await mcp.connect(
   new StdioClientTransport({
     command: "npx",
     args: ["tsx", "src/server.ts"],
-    cwd: path.resolve(here, "../../browser-mcp"),
+    cwd: path.resolve(here, platform === "ios" ? "../../ios-mcp" : "../../browser-mcp"),
     env: env as Record<string, string>,
     stderr: "ignore",
   }),
@@ -100,6 +106,7 @@ const result = await runAgent({
   coverageGate,
   spec,
   navigate,
+  platform,
   screenshotDir: runDir,
   log: console.log,
 });
@@ -108,7 +115,7 @@ await mcp.close();
 const { messages, ...report } = result;
 writeFileSync(
   path.join(runDir, "report.json"),
-  JSON.stringify({ effort, device, navigate, maxSteps, maxCostUsd, prompt, coverageGate, spec: specFile ? path.basename(specFile) : undefined, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
+  JSON.stringify({ platform, effort, device, navigate, maxSteps, maxCostUsd, prompt, coverageGate, spec: specFile ? path.basename(specFile) : undefined, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
 );
 writeFileSync(path.join(runDir, "transcript.json"), JSON.stringify(messages, null, 2));
 

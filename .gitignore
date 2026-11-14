@@ -12,3 +12,4 @@ buggyshop/test-results/
 buggyshop/playwright-report/
 agent/runs-discarded/
 buggyshop/tests/visual/__screenshots__/darwin/
+ios/build/

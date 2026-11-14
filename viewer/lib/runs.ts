@@ -9,7 +9,10 @@ import { liveBugs, score, type ExtraBug, type Score, type TruthBug } from "../..
 import type { BugReport } from "../../agent/src/tools";
 
 export const RUNS_DIR = process.env.WEBPROBE_RUNS ?? path.resolve(process.cwd(), "../agent/runs");
-const MANIFEST = path.resolve(process.cwd(), "../buggyshop/bugs.manifest.json");
+const MANIFESTS = {
+  web: path.resolve(process.cwd(), "../buggyshop/bugs.manifest.json"),
+  ios: path.resolve(process.cwd(), "../ios/bugs.manifest.json"),
+};
 
 export type ToolCall = { step: number; name: string; input: unknown; isError: boolean; output: string };
 
@@ -45,6 +48,7 @@ export type Run = {
   coverageGate?: boolean;
   spec?: string;
   device?: string;
+  platform?: Platform;
   navigate?: string;
   maxSteps?: number;
   specChecks?: SpecCheckResult[];
@@ -65,15 +69,18 @@ export type Run = {
 
 type Manifest = { bugs: TruthBug[]; extras?: ExtraBug[] };
 
-const manifest = (): Manifest => JSON.parse(readFileSync(MANIFEST, "utf8"));
+// Web runs are scored against the web shop's answer key, iOS runs against the iOS app's.
+const manifest = (platform: Platform = "web"): Manifest => JSON.parse(readFileSync(MANIFESTS[platform], "utf8"));
 
-export function truth(): TruthBug[] {
-  return manifest().bugs;
+export type Platform = "web" | "ios";
+
+export function truth(platform: Platform = "web"): TruthBug[] {
+  return manifest(platform).bugs;
 }
 
 // Real defects that were not seeded, confirmed by a person (see bugs.manifest.json).
-export function extras(): ExtraBug[] {
-  return manifest().extras ?? [];
+export function extras(platform: Platform = "web"): ExtraBug[] {
+  return manifest(platform).extras ?? [];
 }
 
 // Run folders are named by start time with ':' and '.' replaced: 2026-11-08T06-16-38-934Z.
@@ -83,11 +90,14 @@ function startedAt(id: string): Date {
 
 const ID = /^[\w-]+$/;
 
-export function getRun(id: string, bugs = truth(), extraBugs = extras()): Run | null {
+export function getRun(id: string): Run | null {
   if (!ID.test(id)) return null;
   const file = path.join(RUNS_DIR, id, "report.json");
   if (!existsSync(file)) return null;
   const raw = JSON.parse(readFileSync(file, "utf8"));
+  const platform: Platform = raw.platform === "ios" ? "ios" : "web";
+  const bugs = truth(platform);
+  const extraBugs = extras(platform);
   const live = raw.liveBugs ?? "all";
   return {
     ...raw,
@@ -117,11 +127,9 @@ function readTests(dir: string): RunTests | undefined {
 
 export function listRuns(): Run[] {
   if (!existsSync(RUNS_DIR)) return [];
-  const bugs = truth();
-  const extraBugs = extras();
   return readdirSync(RUNS_DIR)
     .filter((id) => ID.test(id))
-    .map((id) => getRun(id, bugs, extraBugs))
+    .map((id) => getRun(id))
     .filter((r): r is Run => r !== null)
     .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
 }
@@ -148,6 +156,7 @@ const mean = (xs: (number | null)[]) => {
 };
 
 const siteOf = (r: Run) =>
+  (r.platform === "ios" ? "iOS app, " : "") +
   (r.score.live.length ? `${r.score.live.length} bugs` : "clean site") +
   (r.prompt && r.prompt !== "default" ? `, ${r.prompt} prompt` : "") +
   (r.coverageGate ? ", coverage gate" : "") +

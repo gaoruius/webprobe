@@ -14,7 +14,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const run = getRun(id);
   if (!run) notFound();
 
-  const bugs = truth();
+  const bugs = truth(run.platform === "ios" ? "ios" : "web");
   const verdict = new Map<number, Verdict>();
   for (const f of run.score.found) verdict.set(f.report, { kind: "found", id: f.id });
   for (const d of run.score.duplicates) verdict.set(d.report, { kind: "duplicate", id: d.id });

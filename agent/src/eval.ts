@@ -109,6 +109,7 @@ export function score(reports: BugReport[], live: TruthBug[], extraBugs: ExtraBu
 }
 
 type RunReport = {
+  platform?: "web" | "ios";
   liveBugs?: string;
   provider?: string;
   model?: string;
@@ -138,15 +139,19 @@ function main(argv: string[]) {
     process.exit(1);
   }
 
-  const manifest = path.resolve(here, "../../buggyshop/bugs.manifest.json");
-  const { bugs: truth, extras: extraBugs = [] } = JSON.parse(readFileSync(manifest, "utf8")) as {
-    bugs: TruthBug[];
-    extras?: ExtraBug[];
+  // iOS runs are scored against the iOS app's answer key.
+  const manifests = {
+    web: path.resolve(here, "../../buggyshop/bugs.manifest.json"),
+    ios: path.resolve(here, "../../ios/bugs.manifest.json"),
   };
+  const load = (p: string) => JSON.parse(readFileSync(p, "utf8")) as { bugs: TruthBug[]; extras?: ExtraBug[] };
 
   const scores: Score[] = [];
+  const seen = new Map<string, TruthBug>();
   for (const dir of dirs) {
     const run = JSON.parse(readFileSync(path.join(dir, "report.json"), "utf8")) as RunReport;
+    const { bugs: truth, extras: extraBugs = [] } = load(manifests[run.platform === "ios" ? "ios" : "web"]);
+    for (const b of truth) seen.set(b.id, b);
     const live = override ?? run.liveBugs ?? "all";
     const bugs = liveBugs(truth, live);
     const s = score(run.bugs, bugs, extraBugs);
@@ -178,7 +183,7 @@ function main(argv: string[]) {
         `precision ${pct(mean(scores.map((s) => s.precision)))}, ` +
         `false positives ${(scores.reduce((a, s) => a + s.falsePositives.length, 0) / scores.length).toFixed(1)}/run`,
     );
-    for (const b of truth) {
+    for (const b of seen.values()) {
       const live = scores.filter((s) => s.live.includes(b.id));
       if (!live.length) continue;
       const n = live.filter((s) => s.found.some((f) => f.id === b.id)).length;

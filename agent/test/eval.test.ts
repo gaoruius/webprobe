@@ -208,3 +208,16 @@ test("the mobile cart-link bug is found from a phone report, and isn't confused 
   );
   assert.deepEqual(s.found.map((f) => f.id), ["mobile-cart-link-hidden", "cart-zero-qty"]);
 });
+
+test("iOS answer key: a crash on 'Reviews (0)' is the crash bug, not the zero-quantity bug", () => {
+  const ios = JSON.parse(readFileSync(new URL("../../ios/bugs.manifest.json", import.meta.url), "utf8")) as { bugs: TruthBug[] };
+  const s = score(
+    [
+      report({ title: "App crashes when opening Reviews (0) on Desk Lamp", page: "Desk Lamp", category: "functional" }),
+      report({ title: "Setting quantity to 0 keeps the item and the total", page: "Cart screen", category: "functional" }),
+      report({ title: "Add to cart buttons have no accessibility label", page: "Products", category: "a11y" }),
+    ],
+    liveBugs(ios.bugs, "all"),
+  );
+  assert.deepEqual(s.found.map((f) => f.id), ["reviews-crash", "cart-zero-qty", "add-button-unlabeled"]);
+});

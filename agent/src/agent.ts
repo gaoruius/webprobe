@@ -33,6 +33,8 @@ export type AgentOptions = {
   // "start-only": navigate may only open the start page, so every other page has to be reached
   // by clicking, as a user would. Typing a URL skips the navigation a user depends on.
   navigate?: "any" | "start-only";
+  // "ios": the target is the iOS app behind ios-mcp, so the prompt talks about screens and crashes.
+  platform?: "web" | "ios";
   // A product spec (markdown). Without one the agent can only flag what contradicts the page
   // itself or common sense; with one it can check rules no page states.
   spec?: string;
@@ -107,6 +109,17 @@ When you confirm a bug, file it right away with report_bug. Report only what you
 
 You can only reach ${target}. Element refs change whenever the page updates, so take a new snapshot before clicking or typing on a changed page.${variant === "budget" ? budgetNote(maxSteps) : ""}${startOnly ? startOnlyNote(target) : ""}${spec ? specNote(spec) : ""}`;
 
+// The same tester, for the iOS app: screens instead of URLs, and a crash is a bug to report.
+const iosSystemPrompt = (spec?: string) => `You are a QA engineer testing the BuggyShop iOS app in the iPhone Simulator.
+
+Explore it the way a careful tester would: open every screen you can reach (tabs, lists, detail screens, every segment), use the main flows end to end, and try edge cases (empty, zero, negative and malformed input). After each action, take a snapshot and check what the screen shows. Elements with no accessibility label show as (no label); that matters to people who use VoiceOver.
+
+If the app crashes, that is a bug: report it, then call launch_app to keep testing.
+
+When you confirm a bug, file it right away with report_bug, with the screen's name as the page (for example Cart). Report only what you observed through the tools, one report per distinct bug. When you have covered the app, call finish.
+
+Refs change whenever the screen updates, so take a new snapshot before tapping or typing on a changed screen.${spec ? specNote(spec) : ""}`;
+
 const startOnlyNote = (target: string) => `
 
 Use the site the way a person does: navigate can only open the start page, ${target}. Reach every other page by clicking links and buttons. If you can't find a way to a page, that is worth reporting.`;
@@ -135,7 +148,10 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
 
   const providerOptions: ProviderOptions = {
     model: opts.model,
-    system: systemPrompt(opts.target, opts.prompt ?? "default", opts.maxSteps, opts.spec, opts.navigate === "start-only"),
+    system:
+      opts.platform === "ios"
+        ? iosSystemPrompt(opts.spec)
+        : systemPrompt(opts.target, opts.prompt ?? "default", opts.maxSteps, opts.spec, opts.navigate === "start-only"),
     firstMessage: `Test ${opts.target} and report every bug you find.`,
     tools: [...browserTools, ...(opts.spec ? [localTools[0], specFinishTool] : localTools)],
     effort: opts.effort,
@@ -159,7 +175,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let step = 0;
   let finished = false;
   let error: string | undefined;
-  const origin = new URL(opts.target).origin;
+  // Page tracking reads URLs out of browser output; an iOS run has no URLs, so no origin.
+  const origin = opts.platform === "ios" ? "" : new URL(opts.target).origin;
   const visited = new Set<string>();
   const linked = new Set<string>();
   const unvisited = () => [...linked].filter((p) => !visited.has(p));

@@ -27,7 +27,12 @@ webprobe/
 │   ├── src/tools.ts      report_bug and finish, the agent's own tools
 │   ├── src/run.ts        one run against BuggyShop → runs/<time>/report.json + screenshots
 │   └── src/eval.ts       scores runs against the manifest (tests in test/)
-└── viewer/               Next.js app to browse runs: scores, bug reports, step timeline
+├── viewer/               Next.js app to browse runs: scores, bug reports, step timeline
+├── ios/                  the iOS version of the shop, and the driver that runs it
+│   ├── BuggyShop/        SwiftUI app with switchable bugs (BUGS)
+│   ├── WebProbeDriver/   XCUITest driver: an HTTP server inside a UI test
+│   └── bugs.manifest.json  ground truth for the iOS app
+└── ios-mcp/              MCP server for the iOS app: launch_app, snapshot, tap, type, swipe
 ```
 
 ## Run it
@@ -455,6 +460,54 @@ The visual suite runs every page at desktop and Pixel 7 size (10 screenshots). W
 cart-link bug on, exactly the five phone screenshots change; with only the price bug, exactly the
 two home pages. CI checks both (`scripts/check-visual.mjs`).
 
+## iOS app
+
+The agent loop doesn't care what it drives: the browser is one MCP server behind it. So the same
+loop, budgets, scorer and viewer test a native app by swapping that server.
+
+```
+agent loop ──MCP──▶ ios-mcp (TypeScript) ──HTTP──▶ WebProbeDriver (XCUITest) ──▶ BuggyShop iOS (SwiftUI)
+```
+
+- **[ios/BuggyShop](ios/BuggyShop)** is a SwiftUI version of the shop (products with search and
+  sort, product detail with reviews, cart with steppers and coupons, checkout, sign up) with eight
+  switchable bugs, read from `BUGS` in its environment like the web shop's `NEXT_PUBLIC_BUGS`. Two
+  only a native app has: opening the Reviews of a product with none **crashes the app**, and the
+  icon-only add-to-cart buttons have **no accessibility label**. Answer key:
+  [ios/bugs.manifest.json](ios/bugs.manifest.json).
+- **[ios/WebProbeDriver](ios/WebProbeDriver/DriverTests.swift)** is a small XCUITest driver, the
+  same idea as the WebDriverAgent that Appium uses: one long-running UI test serves HTTP on
+  127.0.0.1:8100 (the Simulator shares the Mac's network) and turns requests into XCUITest calls.
+  Its snapshot is the app's accessibility tree in the same shape as the web one (`- button "Cart"
+  [ref=e5]`), minus screens the user navigated away from, and it says when the app has crashed.
+- **[ios-mcp](ios-mcp/src/server.ts)** wraps it as MCP tools (`launch_app`, `snapshot`, `tap`,
+  `type`, `swipe`, `screenshot`), starts the driver if it isn't running and stops it after.
+  `npm run smoke` reproduces bugs through the tools, 7 checks.
+- Nothing to install beyond Xcode: the project file is plain `project.pbxproj` with synchronized
+  folders, built by `ios/build.sh`.
+
+```bash
+ios/build.sh                                       # build app + driver for the Simulator (Xcode)
+cd ios-mcp && npm install && npm run smoke          # 7 checks through the MCP tools
+cd agent && WEBPROBE_PLATFORM=ios npm start         # WEBPROBE_IOS_BUGS=all|none|ids
+```
+
+**The driver had a bug, and the eval caught it.** The first three runs had 78% precision, and all
+four false positives were on the checkout ZIP field: "typing into ZIP writes into Street address."
+Replaying the steps on the clean app reproduced it: the keyboard covered the ZIP field, the driver
+tapped the field's old coordinates, hit the keyboard, and typed into the field that still had
+focus. The driver now finds the live element again (same type, label, placeholder, nearest to
+where it was) and taps that, which makes XCUITest scroll it clear first, and it refuses to type
+unless the field the agent asked for has the cursor. A smoke check covers it. Those three runs
+are set aside (`agent/runs-discarded/`, gitignored).
+
+Haiku 5.5, 40 steps, after the fix, 3 runs: **recall 67%, precision 100%**, about $0.01 a run and
+3 minutes. Found every time: the zero quantity, the price sort, the silent coupon and the unlabeled
+buttons. Never: the crash, which needs the Desk Lamp's Reviews in particular. Every run used 38 of
+its 40 steps; each action costs a snapshot here too, so the app needs a bigger budget than 40.
+
+Not in CI yet: it needs a macOS runner with Xcode.
+
 ## Roadmap
 
 - [x] BuggyShop with 5 switchable bugs + ground-truth manifest
@@ -478,6 +531,8 @@ two home pages. CI checks both (`scripts/check-visual.mjs`).
 - [x] visual regression tests (5 pages), with a bug only a screenshot shows; in CI
 - [x] mobile web: device emulation, a phone-only bug, desktop + phone screenshots
 - [x] `WEBPROBE_NAVIGATE=start-only`: the agent clicks like a user; finds the phone-only bug 3/3
+- [x] iOS app: SwiftUI shop, an XCUITest driver, ios-mcp; Haiku 67% recall, 100% precision
+- [ ] iOS in CI (macOS runner); a bigger step budget for the app
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
