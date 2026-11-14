@@ -103,7 +103,7 @@ jobs:
           name: visual-diffs
           path: buggyshop/test-results/
 
-  # With only the visual bug on, the home page screenshot must fail and the other pages must not.
+  # Each visual bug on its own must break exactly the screenshots it should, and no others.
   visual-catches-bug:
     if: ${{ !inputs.update_visual_baselines }}
     runs-on: ubuntu-latest
@@ -114,13 +114,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: npm ci
-      - run: NEXT_PUBLIC_BUGS=visual-price-invisible npm run test:visual || true
-      - name: Only the home page should differ
+      - name: White-on-white prices change only the home page, at both sizes
         run: |
-          node -e '
-            const r = require("./test-results/results.json");
-            const tests = r.suites.flatMap(function walk(s) { return [...(s.specs || []), ...(s.suites || []).flatMap(walk)]; });
-            const failed = tests.filter((t) => !t.ok).map((t) => t.title);
-            console.log("failed:", failed);
-            if (failed.length !== 1 || failed[0] !== "home page") process.exit(1);
-          '
+          NEXT_PUBLIC_BUGS=visual-price-invisible npm run test:visual || true
+          node scripts/check-visual.mjs desktop/home mobile/home
+      - name: The hidden cart link changes every page at phone size, none at desktop size
+        run: |
+          rm -rf test-results
+          NEXT_PUBLIC_BUGS=mobile-cart-link-hidden npm run test:visual || true
+          node scripts/check-visual.mjs "mobile/*"

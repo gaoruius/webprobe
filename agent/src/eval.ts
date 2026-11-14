@@ -20,7 +20,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { BugReport } from "./tools.js";
 
-export type TruthBug = { id: string; page: string | string[]; category: string; summary: string; match: string };
+export type TruthBug = { id: string; device?: string; page: string | string[]; category: string; summary: string; match: string };
 
 export type Score = {
   live: string[];

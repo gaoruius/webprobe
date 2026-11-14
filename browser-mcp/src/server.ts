@@ -10,11 +10,13 @@
 //   screenshot()           PNG of the visible page (the WebProbe agent keeps this one for
 //                          itself: it attaches one to each bug report)
 //
+// WEBPROBE_DEVICE="Pixel 7" (or any Playwright device name) emulates that phone.
+//
 // Transport is stdio, so stdout belongs to the MCP protocol: log to stderr only.
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { chromium, devices, type Browser, type BrowserContext, type Page } from "playwright";
 import { z } from "zod";
 
 // Safety: the agent may only reach the site under test (lecture 4/5: enforce rules in
@@ -22,6 +24,14 @@ import { z } from "zod";
 const ALLOWED_ORIGINS = new Set(
   (process.env.WEBPROBE_ALLOWED_ORIGINS ?? "http://localhost:3000").split(",").map((o) => o.trim()),
 );
+
+// WEBPROBE_DEVICE emulates a phone or tablet from Playwright's device list ("Pixel 7",
+// "iPhone 15"): its screen size, pixel ratio, touch and user agent. The engine stays Chromium,
+// so this tests the responsive layout, not Safari itself.
+const DEVICE = process.env.WEBPROBE_DEVICE || undefined;
+if (DEVICE && !devices[DEVICE]) {
+  throw new Error(`Unknown WEBPROBE_DEVICE "${DEVICE}". Use a name from Playwright's devices list, e.g. "Pixel 7".`);
+}
 
 // Snapshots go straight into the model's context, so cap their size (context bloat).
 const MAX_SNAPSHOT_CHARS = Number(process.env.WEBPROBE_MAX_SNAPSHOT_CHARS ?? 12000);
@@ -77,7 +87,9 @@ async function getPage(): Promise<Page> {
     log("browser launched");
   }
   if (!context) {
-    context = await browser.newContext();
+    const { defaultBrowserType: _, ...emulation } = DEVICE ? devices[DEVICE] : { defaultBrowserType: undefined };
+    context = await browser.newContext(emulation);
+    if (DEVICE) log(`emulating ${DEVICE}`);
     // The allowlist in `navigate` alone isn't enough: a click on an outside link, a redirect
     // or a script could still leave the site. Block every off-site request at the network layer.
     await context.route("**/*", (route) => {

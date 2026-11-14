@@ -1,5 +1,5 @@
 {
-  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file. `match` is a case-insensitive regex the eval runs over a report's title, actual and evidence; a report counts as finding a bug when its page is the bug's page, or one of them when `page` is a list (`*` matches any one path segment), and `match` hits. `spec_only` marks bugs that only SPEC.md, not the site, says are wrong.",
+  "description": "Ground truth for the eval. Each id matches isBugOn(id) in lib/bugs.ts. The agent never sees this file. `match` is a case-insensitive regex the eval runs over a report's title, actual and evidence; a report counts as finding a bug when its page is the bug's page, or one of them when `page` is a list (`*` matches any one path segment), and `match` hits. `spec_only` marks bugs that only SPEC.md, not the site, says are wrong. `device: \"mobile\"` marks bugs that only appear at phone width; they are live only in runs that emulate a phone.",
   "bugs": [
     {
       "id": "cart-zero-qty",
@@ -134,6 +134,23 @@
       "expected": "After 'Place order', the header shows Cart (0) and /cart is empty.",
       "how_to_trigger": "Place an order on /checkout, then look at the header or /cart.",
       "match": "(order|checkout|purchase)[^\\n]*(cart|items)[^\\n]*(not|still|remain|clear|empty)|(cart|items)[^\\n]*(not|still|remain)[^\\n]*(clear|empt|after)[^\\n]*(order|checkout|purchase)"
+    },
+    {
+      "id": "mobile-cart-link-hidden",
+      "category": "functional",
+      "severity": "major",
+      "page": [
+        "/",
+        "/product/*",
+        "/signup",
+        "/checkout",
+        "/cart"
+      ],
+      "device": "mobile",
+      "summary": "On screens narrower than 600px the header's Cart link is hidden and nothing replaces it, so a phone user can't reach the cart.",
+      "expected": "The cart is reachable from the header on every screen size.",
+      "how_to_trigger": "Open any page at phone width (e.g. Pixel 7) and look for a way to the cart.",
+      "match": "(cart|basket)[^\\n]*(link|menu|navigation|\\bnav\\b|reach|no way|can't|cannot)|(no|missing|hidden)[^\\n]*(cart|basket) (link|button|icon|menu)"
     }
   ],
   "extras_description": "Real defects that were not seeded: an agent reported them and a person confirmed them in the code. Matched on a report's page and title only, since evidence often shows other problems on the same page. A matching report counts as correct for precision; extras are not part of recall, which is about the seeded bugs.",

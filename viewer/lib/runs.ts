@@ -44,6 +44,7 @@ export type Run = {
   prompt?: string;
   coverageGate?: boolean;
   spec?: string;
+  device?: string;
   maxSteps?: number;
   specChecks?: SpecCheckResult[];
   target?: string;
@@ -149,6 +150,7 @@ const siteOf = (r: Run) =>
   (r.score.live.length ? `${r.score.live.length} bugs` : "clean site") +
   (r.prompt && r.prompt !== "default" ? `, ${r.prompt} prompt` : "") +
   (r.coverageGate ? ", coverage gate" : "") +
+  (r.device ? `, ${r.device}` : "") +
   (r.spec ? ", with spec" : "") +
   (r.maxSteps !== undefined ? `, ${r.maxSteps} steps` : "");
 

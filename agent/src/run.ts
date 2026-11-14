@@ -34,9 +34,15 @@ const model = process.env.WEBPROBE_MODEL || undefined;
 // The agent never sees it.
 // "all" is recorded as the explicit list, so old runs still score right after bugs are added.
 const liveBugsSetting = process.env.WEBPROBE_LIVE_BUGS ?? "all";
+// The browser server reads this too (it passes through the environment) and emulates the device.
+const device = process.env.WEBPROBE_DEVICE || undefined;
+// A bug marked device: "mobile" only shows at phone width, so it's live only when we emulate one.
 const liveBugs =
   liveBugsSetting === "all"
-    ? (JSON.parse(readFileSync(MANIFEST, "utf8")).bugs as { id: string }[]).map((b) => b.id).join(",")
+    ? (JSON.parse(readFileSync(MANIFEST, "utf8")).bugs as { id: string; device?: string }[])
+        .filter((b) => b.device !== "mobile" || device)
+        .map((b) => b.id)
+        .join(",")
     : liveBugsSetting;
 const maxSteps = Number(process.env.WEBPROBE_MAX_STEPS ?? 40);
 const maxCostUsd = Number(process.env.WEBPROBE_MAX_COST_USD ?? 2);
@@ -77,7 +83,7 @@ await mcp.connect(
   }),
 );
 
-console.log(`WebProbe: ${provider}, effort ${effort}, prompt ${prompt}${coverageGate ? ", coverage gate" : ""}${specFile ? `, spec ${path.basename(specFile)}` : ""}, up to ${maxSteps} steps / $${maxCostUsd} on ${target}\n`);
+console.log(`WebProbe: ${provider}, effort ${effort}, prompt ${prompt}${device ? `, device ${device}` : ""}${coverageGate ? ", coverage gate" : ""}${specFile ? `, spec ${path.basename(specFile)}` : ""}, up to ${maxSteps} steps / $${maxCostUsd} on ${target}\n`);
 const started = Date.now();
 const runDir = path.resolve(here, "../runs", new Date(started).toISOString().replace(/[:.]/g, "-"));
 mkdirSync(runDir, { recursive: true });
@@ -100,7 +106,7 @@ await mcp.close();
 const { messages, ...report } = result;
 writeFileSync(
   path.join(runDir, "report.json"),
-  JSON.stringify({ effort, maxSteps, maxCostUsd, prompt, coverageGate, spec: specFile ? path.basename(specFile) : undefined, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
+  JSON.stringify({ effort, device, maxSteps, maxCostUsd, prompt, coverageGate, spec: specFile ? path.basename(specFile) : undefined, target, liveBugs, seconds: (Date.now() - started) / 1000, ...report }, null, 2),
 );
 writeFileSync(path.join(runDir, "transcript.json"), JSON.stringify(messages, null, 2));
 

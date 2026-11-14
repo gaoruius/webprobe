@@ -197,3 +197,14 @@ test("spec-only bugs: a bulk-discount report and a cart-not-cleared report each 
   );
   assert.deepEqual(s.found.map((f) => f.id), ["bulk-discount-missing", "order-cart-not-cleared", "cart-zero-qty"]);
 });
+
+test("the mobile cart-link bug is found from a phone report, and isn't confused with cart bugs", () => {
+  const s = score(
+    [
+      report({ title: "No way to reach the cart on mobile: Cart link missing from header", page: "/", category: "functional" }),
+      zeroQty,
+    ],
+    liveBugs(truth, "all"),
+  );
+  assert.deepEqual(s.found.map((f) => f.id), ["mobile-cart-link-hidden", "cart-zero-qty"]);
+});
