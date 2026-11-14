@@ -501,10 +501,17 @@ where it was) and taps that, which makes XCUITest scroll it clear first, and it 
 unless the field the agent asked for has the cursor. A smoke check covers it. Those three runs
 are set aside (`agent/runs-discarded/`, gitignored).
 
-Haiku 5.5, 40 steps, after the fix, 3 runs: **recall 67%, precision 100%**, about $0.01 a run and
-3 minutes. Found every time: the zero quantity, the price sort, the silent coupon and the unlabeled
-buttons. Never: the crash, which needs the Desk Lamp's Reviews in particular. Every run used 38 of
-its 40 steps; each action costs a snapshot here too, so the app needs a bigger budget than 40.
+Haiku 5.5 after the fix, 3 runs per budget:
+
+| | recall | precision | the crash | steps used | cost / run |
+|---|---|---|---|---|---|
+| 40 steps | 67% | 100% | 0/3 | 38 (the whole budget) | ~$0.01 |
+| **60 steps** | **96%** | **100%** | **3/3** | 52–56 (stopped by itself) | ~$0.02 |
+
+At 40 every run used its whole budget and never reached the Desk Lamp's Reviews. At 60 two runs
+found all eight bugs; each hit the crash, reported it, and called `launch_app` to carry on. One run
+also reported a real bug nobody seeded: a product page still says "Added" after the cart is
+emptied (`added` is view state that never resets). It's now an extra in the iOS answer key.
 
 Not in CI yet: it needs a macOS runner with Xcode.
 
@@ -531,8 +538,9 @@ Not in CI yet: it needs a macOS runner with Xcode.
 - [x] visual regression tests (5 pages), with a bug only a screenshot shows; in CI
 - [x] mobile web: device emulation, a phone-only bug, desktop + phone screenshots
 - [x] `WEBPROBE_NAVIGATE=start-only`: the agent clicks like a user; finds the phone-only bug 3/3
-- [x] iOS app: SwiftUI shop, an XCUITest driver, ios-mcp; Haiku 67% recall, 100% precision
-- [ ] iOS in CI (macOS runner); a bigger step budget for the app
+- [x] iOS app: SwiftUI shop, an XCUITest driver, ios-mcp
+- [x] iOS at 60 steps: 96% recall, 100% precision, the crash found 3/3
+- [ ] iOS in CI (macOS runner)
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
