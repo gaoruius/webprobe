@@ -39,7 +39,8 @@ const text = (t: string, isError = false) => ({ content: [{ type: "text" as cons
 let driver: ChildProcess | undefined;
 let launched = false;
 
-async function call(method: "GET" | "POST", route: string, body?: object, timeoutMs = 60_000): Promise<{ ok: boolean; text: string }> {
+// XCUITest is slow on CI machines: a cold simulator's first snapshot can take a minute or two.
+async function call(method: "GET" | "POST", route: string, body?: object, timeoutMs = 180_000): Promise<{ ok: boolean; text: string }> {
   const res = await fetch(DRIVER + route, {
     method,
     body: body ? JSON.stringify(body) : undefined,
@@ -48,7 +49,19 @@ async function call(method: "GET" | "POST", route: string, body?: object, timeou
   return { ok: res.ok, text: await res.text() };
 }
 
-const driverUp = () => call("GET", "/snapshot", undefined, 2_000).then(() => true, () => false);
+// Up, or down (nothing listening). A slow answer is a busy driver, not a dead one: starting a second
+// driver then would kill the first mid-command.
+async function driverUp(): Promise<boolean> {
+  try {
+    await call("GET", "/ping", undefined, 30_000);
+    return true;
+  } catch (err) {
+    const cause = (err as { cause?: { code?: string } }).cause;
+    if (cause?.code === "ECONNREFUSED") return false;
+    log("driver did not answer ping in time; assuming it is busy");
+    return true;
+  }
+}
 
 // Start WebProbeDriver if nothing answers on the port, then launch the app once.
 async function ready(): Promise<void> {
@@ -63,8 +76,10 @@ async function ready(): Promise<void> {
         "-only-testing:WebProbeDriver/DriverTests/testServe"],
       { stdio: "ignore", env: { ...process.env, TEST_RUNNER_WEBPROBE_DRIVER_PORT: String(PORT) } },
     );
-    for (let i = 0; i < 90 && !(await driverUp()); i++) await new Promise((r) => setTimeout(r, 2_000));
-    if (!(await driverUp())) throw new Error("WebProbeDriver did not start within 3 minutes.");
+    for (let i = 0; i < 180 && !(await driverUp()); i++) await new Promise((r) => setTimeout(r, 2_000));
+    if (!(await driverUp())) throw new Error("WebProbeDriver did not start within 6 minutes.");
+    // A new driver means a new test session: the app has to be launched again.
+    launched = false;
   }
   if (!launched) {
     await call("POST", "/launch", { bugs: BUGS });

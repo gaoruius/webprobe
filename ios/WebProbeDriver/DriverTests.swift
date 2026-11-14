@@ -9,6 +9,7 @@
 //   POST /swipe      {"direction": "up"}   scroll the screen
 //   GET  /screenshot                        PNG, base64
 //   POST /quit                              end the test (and the server)
+//   GET  /ping                              "pong", answered at once, without touching the app
 //
 // XCUITest calls must run on the main thread, so requests are queued and the test method runs
 // them while it spins the main run loop.
@@ -55,6 +56,12 @@ final class DriverTests: XCTestCase {
             var buf = buffer
             if let data { buf.append(data) }
             if let request = Request(buf) {
+                // A health check must not wait behind a slow XCUITest call on the main thread,
+                // or a busy driver looks like a dead one.
+                if request.path == "/ping" {
+                    self.respond(conn, status: 200, body: "pong")
+                    return
+                }
                 DispatchQueue.main.async {
                     let (status, body) = self.handle(request)
                     self.respond(conn, status: status, body: body)

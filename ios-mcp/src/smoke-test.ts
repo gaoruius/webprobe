@@ -15,7 +15,8 @@ await client.connect(
 );
 
 async function tool(name: string, args: Record<string, unknown> = {}): Promise<string> {
-  const res = await client.callTool({ name, arguments: args });
+  // Generous: the first call starts the driver, and CI simulators are slow.
+  const res = await client.callTool({ name, arguments: args }, undefined, { timeout: 600_000 });
   return (res.content as { type: string; text?: string }[]).map((c) => c.text ?? `[${c.type}]`).join("\n");
 }
 
