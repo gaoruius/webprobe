@@ -67,6 +67,8 @@ npm run promote-tests -- runs/<dir> ...            # copies valid ones to buggys
 # the regression suite (no API key; Playwright builds and starts its own copy of the shop)
 cd buggyshop && npm run test:regression            # clean site: all must pass
 npm run test:regression:buggy                      # all bugs on: all should fail
+npm run test:visual                                # screenshots vs. baselines (make Mac ones first:
+                                                   #   npm run test:visual:update; CI uses Linux ones)
 
 # 6. browse runs
 cd viewer && npm install && npm run dev            # http://localhost:3001
@@ -108,6 +110,12 @@ states the rule (`spec_only` in the manifest):
 |---|---|---|---|
 | `bulk-discount-missing` | functional | /cart | 10 or more of one product should get 10% off; nothing is taken off |
 | `order-cart-not-cleared` | functional | /checkout | after an order is placed, the cart keeps its items |
+
+Added in v0.4, visible only on screen (`visual` in the manifest, outside the agent's recall):
+
+| id | page | what's wrong |
+|---|---|---|
+| `visual-price-invisible` | / | prices are white on the white card; the text is still there |
 
 A bug's `page` can be a list when it can fairly be reported from more than one page. Runs record
 the exact bugs that were live, so runs from v0.1 still score out of 5.
@@ -381,6 +389,28 @@ bugs have a test there now; `order-link-404` never got a valid one.
 So the model is paid once, when it writes a test (about $0.002); after that the test runs on
 every change for free, in about 10 seconds for all nine.
 
+## Visual regression tests
+
+The agent reads the accessibility tree, which is cheap and catches accessibility bugs, but it
+can't see anything that only shows on screen. `visual-price-invisible` makes every price on the
+home page white on white: unreadable for a person, while the accessibility snapshot of the page
+is byte-for-byte the same with and without the bug (checked). That's a bug the agent can't find
+by design.
+
+`buggyshop/tests/visual` covers that gap with Playwright's `toHaveScreenshot`: the home page, a
+product page, a cart with two items, checkout and a signup error, compared with committed
+baselines (up to 30 differing pixels allowed). With only the visual bug on, the home page test
+fails on 284 pixels, the diff image marks exactly the three prices, and the other four pages pass.
+
+Rendering differs by platform (fonts, anti-aliasing), so baselines live in
+`__screenshots__/<platform>/`. The committed ones are Linux, made by CI in the
+`mcr.microsoft.com/playwright:v1.64.0-noble` image it also tests in: run the CI workflow by hand
+with `update_visual_baselines`, review the uploaded images, commit them. Mac baselines are local
+and gitignored.
+
+CI runs two more jobs: `visual` (every page matches its baseline) and `visual-catches-bug` (with
+only the visual bug on, the home page and nothing else differs).
+
 ## Roadmap
 
 - [x] BuggyShop with 5 switchable bugs + ground-truth manifest
@@ -401,6 +431,7 @@ every change for free, in about 10 seconds for all nine.
 - [x] product spec mode: Haiku with spec and 60 steps finds 12/12 (3/3 runs)
 - [x] step-budget sweep (20–80): the knee is about 60 with a spec
 - [x] budget-hit rate in the viewer; spec coverage report checked against the trace
+- [x] visual regression tests (5 pages), with a bug only a screenshot shows; in CI
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
