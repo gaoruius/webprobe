@@ -123,3 +123,16 @@ jobs:
           rm -rf test-results
           NEXT_PUBLIC_BUGS=mobile-cart-link-hidden npm run test:visual || true
           node scripts/check-visual.mjs "mobile/*"
+
+  # The iOS app on a macOS runner (free for public repositories): build it and the XCUITest
+  # driver, then reproduce its bugs through ios-mcp. No model calls, no API key.
+  ios:
+    if: ${{ !inputs.update_visual_baselines }}
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: ios/ci.sh

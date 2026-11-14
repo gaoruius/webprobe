@@ -28,6 +28,9 @@ const IOS_DIR = path.join(here, "../../ios");
 const PORT = Number(process.env.WEBPROBE_DRIVER_PORT ?? 8100);
 const DRIVER = `http://127.0.0.1:${PORT}`;
 const DEVICE = process.env.WEBPROBE_IOS_DEVICE ?? "iPhone 17";
+// A full xcodebuild destination wins over the device name, e.g. "platform=iOS Simulator,id=<UDID>"
+// in CI, where several simulators can share a name.
+const DESTINATION = process.env.WEBPROBE_IOS_DESTINATION ?? `platform=iOS Simulator,name=${DEVICE}`;
 const BUGS = process.env.WEBPROBE_IOS_BUGS ?? "all";
 
 const log = (...args: unknown[]) => console.error("[ios-mcp]", ...args);
@@ -53,10 +56,10 @@ async function ready(): Promise<void> {
     const products = path.join(IOS_DIR, "build/Build/Products");
     const xctestrun = readdirSync(products).find((f) => f.endsWith(".xctestrun"));
     if (!xctestrun) throw new Error("No .xctestrun in ios/build. Run ios/build.sh first.");
-    log("starting WebProbeDriver on", DEVICE);
+    log("starting WebProbeDriver on", DESTINATION);
     driver = spawn(
       "xcodebuild",
-      ["test-without-building", "-xctestrun", path.join(products, xctestrun), "-destination", `platform=iOS Simulator,name=${DEVICE}`,
+      ["test-without-building", "-xctestrun", path.join(products, xctestrun), "-destination", DESTINATION,
         "-only-testing:WebProbeDriver/DriverTests/testServe"],
       { stdio: "ignore", env: { ...process.env, TEST_RUNNER_WEBPROBE_DRIVER_PORT: String(PORT) } },
     );

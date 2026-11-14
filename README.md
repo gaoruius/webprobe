@@ -513,7 +513,9 @@ found all eight bugs; each hit the crash, reported it, and called `launch_app` t
 also reported a real bug nobody seeded: a product page still says "Added" after the cart is
 emptied (`added` is view state that never resets). It's now an extra in the iOS answer key.
 
-Not in CI yet: it needs a macOS runner with Xcode.
+In CI: an `ios` job on a macOS runner (free for public repositories) runs [ios/ci.sh](ios/ci.sh):
+it picks the newest Xcode and an iPhone simulator by UDID, builds the app and the driver, and runs
+the smoke test. No model calls.
 
 ## Roadmap
 
@@ -540,7 +542,7 @@ Not in CI yet: it needs a macOS runner with Xcode.
 - [x] `WEBPROBE_NAVIGATE=start-only`: the agent clicks like a user; finds the phone-only bug 3/3
 - [x] iOS app: SwiftUI shop, an XCUITest driver, ios-mcp
 - [x] iOS at 60 steps: 96% recall, 100% precision, the crash found 3/3
-- [ ] iOS in CI (macOS runner)
+- [x] iOS in CI: build + smoke test on a macOS runner
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split

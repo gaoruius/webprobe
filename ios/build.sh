@@ -5,6 +5,6 @@ set -e
 cd "$(dirname "$0")"
 xcodebuild build-for-testing \
   -project BuggyShop.xcodeproj -scheme BuggyShop \
-  -destination "platform=iOS Simulator,name=${WEBPROBE_IOS_DEVICE:-iPhone 17}" \
+  -destination "${WEBPROBE_IOS_DESTINATION:-platform=iOS Simulator,name=${WEBPROBE_IOS_DEVICE:-iPhone 17}}" \
   -derivedDataPath build CODE_SIGNING_ALLOWED=NO -quiet
 echo "Built. Products in ios/build/Build/Products."
