@@ -155,3 +155,11 @@ button.toggle[aria-pressed="true"] {
 .num {
   text-align: right;
 }
+
+.price {
+  font-weight: 600;
+}
+
+.price-invisible {
+  color: #fff;
+}

@@ -64,7 +64,9 @@ export function ProductGrid({ products }: { products: Product[] }) {
               <h2>
                 <Link href={`/product/${p.id}`}>{p.name}</Link>
               </h2>
-              <p>${p.price}</p>
+              {/* BUG visual-price-invisible: the price is white on the white card. Only a person or
+                  a screenshot notices: the text, and so the accessibility tree, is unchanged. */}
+              <p className={isBugOn("visual-price-invisible") ? "price price-invisible" : "price"}>${p.price}</p>
               <AddToCartButton id={p.id} name={p.name} price={p.price} />
             </div>
           ))}

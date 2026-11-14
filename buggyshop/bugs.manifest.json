@@ -162,5 +162,15 @@
       "confirmed": "cart/page.tsx applyCoupon returns on !res.ok without resetting discount.",
       "first_reported": "claude-haiku-5-5 on the clean site, 2026-11-09"
     }
+  ],
+  "visual_description": "Bugs only a screenshot shows: the text and accessibility tree are unchanged, so the agent, which reads the tree, can't see them. They are not part of the agent's recall; the visual regression suite (buggyshop/tests/visual) is what catches them.",
+  "visual": [
+    {
+      "id": "visual-price-invisible",
+      "page": "/",
+      "summary": "Product prices on the home page are white on a white card, so they can't be read.",
+      "expected": "Prices are visible.",
+      "how_to_trigger": "Open / and look at the product cards."
+    }
   ]
 }

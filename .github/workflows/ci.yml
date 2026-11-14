@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      update_visual_baselines:
+        description: "Write new visual baselines and upload them as an artifact (commit them after review)"
+        type: boolean
+        default: false
 
 jobs:
   # The scorer and the agent's page tracking. No API keys: nothing here calls a model.
@@ -68,3 +74,53 @@ jobs:
           failed=$(jq '.stats.unexpected' test-results/results.json)
           echo "passed with bugs on: $passed, failed: $failed"
           test "$passed" -eq 0 && test "$failed" -gt 0
+
+  # Screenshots of the main pages against the committed baselines. Runs in Playwright's own image
+  # so fonts and rendering match the machine the baselines were made on.
+  visual:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.64.0-noble
+    defaults:
+      run:
+        working-directory: buggyshop
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - name: Compare with baselines
+        if: ${{ !inputs.update_visual_baselines }}
+        run: npm run test:visual
+      - name: Write new baselines
+        if: ${{ inputs.update_visual_baselines }}
+        run: npm run test:visual:update
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.update_visual_baselines }}
+        with:
+          name: visual-baselines-linux
+          path: buggyshop/tests/visual/__screenshots__/linux/
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-diffs
+          path: buggyshop/test-results/
+
+  # With only the visual bug on, the home page screenshot must fail and the other pages must not.
+  visual-catches-bug:
+    if: ${{ !inputs.update_visual_baselines }}
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.64.0-noble
+    defaults:
+      run:
+        working-directory: buggyshop
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: NEXT_PUBLIC_BUGS=visual-price-invisible npm run test:visual || true
+      - name: Only the home page should differ
+        run: |
+          node -e '
+            const r = require("./test-results/results.json");
+            const tests = r.suites.flatMap(function walk(s) { return [...(s.specs || []), ...(s.suites || []).flatMap(walk)]; });
+            const failed = tests.filter((t) => !t.ok).map((t) => t.title);
+            console.log("failed:", failed);
+            if (failed.length !== 1 || failed[0] !== "home page") process.exit(1);
+          '
