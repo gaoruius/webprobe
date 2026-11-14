@@ -52,6 +52,7 @@ cd agent && npm install && npm start
 #    prompt:   WEBPROBE_PROMPT=budget  (tell the model its step budget; see Results)
 #    gate:     WEBPROBE_COVERAGE_GATE=1  (refuse finish while linked pages are unopened)
 #    spec:     WEBPROBE_SPEC=../buggyshop/SPEC.md  (give the agent the product spec)
+#    device:   WEBPROBE_DEVICE="Pixel 7"  (emulate a phone: size, touch, user agent; on Chromium)
 #    against the clean site, tell the eval: WEBPROBE_LIVE_BUGS=none npm start
 
 # 4. score runs
@@ -110,6 +111,13 @@ states the rule (`spec_only` in the manifest):
 |---|---|---|---|
 | `bulk-discount-missing` | functional | /cart | 10 or more of one product should get 10% off; nothing is taken off |
 | `order-cart-not-cleared` | functional | /checkout | after an order is placed, the cart keeps its items |
+
+Added in v0.5, only at phone width (`device: "mobile"` in the manifest; live only in runs that
+emulate a phone):
+
+| id | category | page | what's wrong |
+|---|---|---|---|
+| `mobile-cart-link-hidden` | functional | every page | under 600px the header's Cart link is hidden, and nothing replaces it |
 
 Added in v0.4, visible only on screen (`visual` in the manifest, outside the agent's recall):
 
@@ -411,6 +419,24 @@ and gitignored.
 CI runs two more jobs: `visual` (every page matches its baseline) and `visual-catches-bug` (with
 only the visual bug on, the home page and nothing else differs).
 
+## Mobile web
+
+`WEBPROBE_DEVICE` makes the browser server emulate any device in Playwright's list (screen size,
+pixel ratio, touch, user agent; the engine stays Chromium, so this tests responsive layout, not
+Safari itself). `mobile-cart-link-hidden` is a bug only a phone shows: at phone width the Cart
+link is gone from the accessibility tree, on desktop and on the clean site it is there (checked).
+
+Haiku 5.5 at Pixel 7 size, 40 steps, no spec, 3 runs: **0/3 found the mobile bug**. The traces
+say why: every run reached the cart by calling `navigate` with `/cart`, and never needed the
+header link. A person on a phone can't do that, so navigating by URL hides a whole class of bugs,
+the ones you only meet by clicking your way somewhere. On the other twelve bugs it averaged 67%
+(desktop, same settings: 83%), with one false positive ("cart total excludes the shipping that
+checkout adds", which is how most shops work).
+
+The visual suite runs every page at desktop and Pixel 7 size (10 screenshots). With only the
+cart-link bug on, exactly the five phone screenshots change; with only the price bug, exactly the
+two home pages. CI checks both (`scripts/check-visual.mjs`).
+
 ## Roadmap
 
 - [x] BuggyShop with 5 switchable bugs + ground-truth manifest
@@ -432,6 +458,8 @@ only the visual bug on, the home page and nothing else differs).
 - [x] step-budget sweep (20–80): the knee is about 60 with a spec
 - [x] budget-hit rate in the viewer; spec coverage report checked against the trace
 - [x] visual regression tests (5 pages), with a bug only a screenshot shows; in CI
+- [x] mobile web: device emulation, a phone-only bug, desktop + phone screenshots
+- [ ] let `navigate` only open the start page, so the agent has to click like a user
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
