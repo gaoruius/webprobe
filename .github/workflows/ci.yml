@@ -19,8 +19,8 @@ jobs:
       run:
         working-directory: agent
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -36,8 +36,8 @@ jobs:
       run:
         working-directory: buggyshop
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -45,7 +45,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:regression
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: regression-report
@@ -59,8 +59,8 @@ jobs:
       run:
         working-directory: buggyshop
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -84,7 +84,7 @@ jobs:
       run:
         working-directory: buggyshop
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: npm ci
       - name: Compare with baselines
         if: ${{ !inputs.update_visual_baselines }}
@@ -92,12 +92,12 @@ jobs:
       - name: Write new baselines
         if: ${{ inputs.update_visual_baselines }}
         run: npm run test:visual:update
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ inputs.update_visual_baselines }}
         with:
           name: visual-baselines-linux
           path: buggyshop/tests/visual/__screenshots__/linux/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: visual-diffs
@@ -112,7 +112,7 @@ jobs:
       run:
         working-directory: buggyshop
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: npm ci
       - name: White-on-white prices change only the home page, at both sizes
         run: |
@@ -131,8 +131,8 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
       - run: ios/ci.sh
