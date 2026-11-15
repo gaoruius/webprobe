@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { liveBugs, normalizePage, pageMatches, score, type ExtraBug, type TruthBug } from "../src/eval.js";
+import { liveBugs, normalizePage, pageMatches, passAtK, passHatK, score, type ExtraBug, type TruthBug } from "../src/eval.js";
 import type { BugReport } from "../src/tools.js";
 
 const { bugs: truth, extras } = JSON.parse(
@@ -220,4 +220,16 @@ test("iOS answer key: a crash on 'Reviews (0)' is the crash bug, not the zero-qu
     liveBugs(ios.bugs, "all"),
   );
   assert.deepEqual(s.found.map((f) => f.id), ["reviews-crash", "cart-zero-qty", "add-button-unlabeled"]);
+});
+
+test("pass@k and pass^k match the lecture examples and the edge cases", () => {
+  const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
+  close(passAtK(5, 2, 3), 0.9); // 1 − C(3,3)/C(5,3)
+  close(passHatK(5, 3, 2), 0.3); // C(3,2)/C(5,2)
+  close(passAtK(4, 2, 2), 5 / 6);
+  close(passHatK(4, 2, 2), 1 / 6);
+  close(passAtK(3, 0, 3), 0);
+  close(passAtK(3, 1, 3), 1); // found in any run
+  close(passHatK(3, 3, 3), 1);
+  close(passAtK(3, 2, 1), passHatK(3, 2, 1)); // k = 1 is the plain rate either way
 });

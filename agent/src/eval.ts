@@ -108,6 +108,24 @@ export function score(reports: BugReport[], live: TruthBug[], extraBugs: ExtraBu
   };
 }
 
+const choose = (n: number, k: number) => {
+  let r = 1;
+  for (let i = 0; i < k; i++) r = (r * (n - i)) / (i + 1);
+  return r;
+};
+
+// Unbiased estimates from n runs of which c succeeded, over every way to pick k of them.
+// pass@k: at least one of k succeeds (HumanEval). Right for finding bugs: runs can be merged.
+export function passAtK(n: number, c: number, k: number): number {
+  return n - c < k ? 1 : 1 - choose(n - c, k) / choose(n, k);
+}
+
+// pass^k: all k succeed (τ-bench). Right for staying quiet on a clean site: one false alarm
+// in k runs is enough to lose trust.
+export function passHatK(n: number, c: number, k: number): number {
+  return choose(c, k) / choose(n, k);
+}
+
 type RunReport = {
   platform?: "web" | "ios";
   liveBugs?: string;
@@ -183,12 +201,33 @@ function main(argv: string[]) {
         `precision ${pct(mean(scores.map((s) => s.precision)))}, ` +
         `false positives ${(scores.reduce((a, s) => a + s.falsePositives.length, 0) / scores.length).toFixed(1)}/run`,
     );
+    const perBug: { n: number; c: number }[] = [];
     for (const b of seen.values()) {
       const live = scores.filter((s) => s.live.includes(b.id));
       if (!live.length) continue;
-      const n = live.filter((s) => s.found.some((f) => f.id === b.id)).length;
-      console.log(`  ${b.id.padEnd(24)} found in ${n}/${live.length} runs`);
+      const c = live.filter((s) => s.found.some((f) => f.id === b.id)).length;
+      perBug.push({ n: live.length, c });
+      console.log(`  ${b.id.padEnd(24)} found in ${c}/${live.length} runs`);
     }
+
+    // Each bug is a task and each run a trial; k can't exceed the fewest runs any bug was live in.
+    const ks = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+    if (perBug.length) {
+      const kMax = Math.min(...perBug.map((b) => b.n));
+      const avg = (f: (b: { n: number; c: number }, k: number) => number, k: number) =>
+        perBug.reduce((a, b) => a + f(b, k), 0) / perBug.length;
+      console.log(
+        `  Per bug over runs: ` +
+          ks(kMax).map((k) => `pass@${k} ${pct(avg((b, k) => passAtK(b.n, b.c, k), k))}`).join("  ") +
+          `   ` +
+          ks(kMax).map((k) => `pass^${k} ${pct(avg((b, k) => passHatK(b.n, b.c, k), k))}`).join("  "),
+      );
+    }
+    const quiet = scores.filter((s) => s.falsePositives.length === 0).length;
+    console.log(
+      `  No false positive: ${quiet}/${scores.length} runs   ` +
+        ks(scores.length).map((k) => `pass^${k} ${pct(passHatK(scores.length, quiet, k))}`).join("  "),
+    );
   }
 }
 

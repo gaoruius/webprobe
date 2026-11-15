@@ -193,6 +193,12 @@ evidence often shows other problems on the same page. Anything else is a false p
 report but extras). Keyword matching is crude, so false positives are listed for a human to
 check rather than trusted. The agent never sees the manifest, and BuggyShop exposes no way to read it.
 
+Given several runs, the eval also treats each live bug as a task and each run as a trial, and
+prints unbiased pass@k (found in at least one of k runs, the HumanEval estimator) and pass^k
+(found in all k, τ-bench's) for k up to the number of runs, plus pass^k for runs with no false
+positive. Pass@k fits finding bugs, since runs can be merged; pass^k fits staying quiet on a
+clean site, since one false alarm is enough to lose trust.
+
 ## Results
 
 ### v0.3: a product spec (12 bugs)
@@ -291,6 +297,21 @@ summaries say so ("I did not test checkout or search"), so it never reaches the 
 the site. Haiku and Opus use nearly the whole budget. On this kind of task, how long a model
 keeps exploring matters as much as how well it reasons, and one run per model would not have
 shown it: Sonnet misses the same four bugs every time.
+
+**Does retrying help?** The same runs as pass@k and pass^k, each bug a task and each run a trial:
+
+| | pass@1 (mean) | pass@3 (any of 3 runs) | pass^3 (all 3 runs) |
+|---|---|---|---|
+| Haiku 5.5 | 87% | **100%** | 70% |
+| Sonnet 5.5 | 57% | **60%** | 50% |
+| Opus 5.5 | 100% | 100% | 100% |
+
+Haiku misses different bugs each run, so merging three runs finds all ten, for about $0.06
+against Opus's $0.55 for one run. Sonnet misses the same bugs every time, so three runs gain
+almost nothing. The mean alone can't tell these apart. Other settings: spec at 60 steps is 100%
+on all three; iOS at 40 steps goes from 67% to 88% with three runs, and at 60 steps from 96% to
+100% (pass^3 88%). Three runs per setting caps k at 3, and the clean site has only two runs, too
+few for a false-positive pass^k.
 
 Is it the budget or the model? Steps undersell the gap: Sonnet makes ~3 tool calls per step, but
 it still takes about 20 browser actions (navigate, click, type) per run where Haiku and Opus take
