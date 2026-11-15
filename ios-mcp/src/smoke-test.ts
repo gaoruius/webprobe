@@ -29,6 +29,19 @@ async function ref(pattern: RegExp): Promise<string> {
   return m[1];
 }
 
+// Snapshots until one contains `text`, for a screen that may still be transitioning. On a slow
+// CI simulator a tap can return before the next screen is in the tree. Throws with the last
+// snapshot, so a failure in CI shows what was on screen.
+async function waitFor(text: string, ms = 10_000): Promise<true> {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const snap = await tool("snapshot");
+    if (snap.includes(text)) return true;
+    if (Date.now() > deadline) throw new Error(`"${text}" not on screen after ${ms / 1000}s:\n${snap}`);
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
 let failures = 0;
 async function check(name: string, fn: () => Promise<boolean>) {
   try {
@@ -36,7 +49,8 @@ async function check(name: string, fn: () => Promise<boolean>) {
     console.log(`${ok ? "✓" : "✗"} ${name}`);
     if (!ok) failures++;
   } catch (err) {
-    console.log(`✗ ${name}: ${(err as Error).message.split("\n")[0]}`);
+    // The whole message: for waitFor it carries the snapshot.
+    console.log(`✗ ${name}: ${(err as Error).message}`);
     failures++;
   }
 }
@@ -64,7 +78,7 @@ await check("[signup-email-validation] 'not-an-email' is accepted", async () => 
   await tool("type", { ref: await ref(/textField placeholder="Email"/), text: "not-an-email" });
   await tool("type", { ref: await ref(/secureTextField placeholder="Password"/), text: "longenough1" });
   await tool("tap", { ref: await ref(/button "Create account"/) });
-  return (await tool("snapshot")).includes("Welcome, not-an-email");
+  return waitFor("Welcome, not-an-email");
 });
 
 // A driver bug once tapped the keyboard instead of a field it covered, and the text went into the
