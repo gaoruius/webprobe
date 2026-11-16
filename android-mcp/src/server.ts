@@ -69,7 +69,9 @@ const empty = (b: Box) => b.x2 <= b.x1 || b.y2 <= b.y1;
 const center = (b: Box) => ({ x: Math.round((b.x1 + b.x2) / 2), y: Math.round((b.y1 + b.y2) / 2) });
 
 const isField = (n: Node) => (n.attrs.class ?? "").endsWith("EditText");
-const actionable = (n: Node) => n.attrs.clickable === "true" || n.attrs.checkable === "true" || isField(n);
+// A selected tab isn't clickable (it's already open), but it's still a tab to list and tap.
+const actionable = (n: Node) =>
+  n.attrs.clickable === "true" || n.attrs.checkable === "true" || n.attrs.selected === "true" || isField(n);
 const own = (n: Node) => n.attrs["content-desc"] || "";
 
 // The texts inside a node, the way TalkBack reads a button out: "Cart", "Reviews (0)".
@@ -247,6 +249,9 @@ async function launch() {
   // A crash should end in "not running", not in a system dialog over the screen.
   await shell("settings", "put", "global", "hide_error_dialogs", "1").catch(() => {});
   await shell("am", "force-stop", PKG);
+  // Key events (back, delete) take Android out of touch mode, and then the next launch focuses the
+  // first text field and opens the keyboard by itself. A tap puts it back; on the status bar it does nothing.
+  await shell("input", "tap", "1", "1");
   await shell("am", "start", "-W", "-n", `${PKG}/.MainActivity`, "--es", "BUGS", BUGS);
   await sleep(1000);
   seen = new Map();
