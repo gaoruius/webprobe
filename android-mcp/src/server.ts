@@ -144,16 +144,21 @@ async function snapshot(): Promise<string> {
   const lines: string[] = [];
   let n = 0;
   // Texts inside a button are already its name: list them once, as the button.
-  const walk = (node: Node, depth: number, inButton: boolean) => {
+  // `scroll` is the nearest scrolling container: it clips what it holds.
+  const walk = (node: Node, depth: number, inButton: boolean, scroll?: Box) => {
     const b = box(node);
     const name = nameOf(node);
+    // uiautomator leaves out nodes the user can't see, so a button cut off at the edge of a
+    // scrolling list loses the text inside it and would look unlabeled. Its bounds are clipped to
+    // the container, so it touches the container's edge: call it what it is.
+    const cut = !name && actionable(node) && scroll !== undefined && (b.y2 >= scroll.y2 - 2 || b.y1 <= scroll.y1 + 2);
     const show = Boolean(node.attrs.class) && !empty(b) && (actionable(node) || (name !== "" && !inButton));
     let next = depth;
     if (show) {
       const ref = `e${++n}`;
       const k = kind(node);
       seen.set(ref, { kind: k, name, box: b });
-      let line = `${"  ".repeat(depth)}- ${k} ${name ? `"${name}"` : "(no label)"}`;
+      let line = `${"  ".repeat(depth)}- ${k} ${name ? `"${name}"` : cut ? "(partly off screen: swipe to see it)" : "(no label)"}`;
       const value = node.attrs.text;
       if (isField(node) && value && value !== name) line += ` value="${value}"`;
       if (node.attrs.enabled === "false") line += " [disabled]";
@@ -162,7 +167,8 @@ async function snapshot(): Promise<string> {
       lines.push(`${line} [ref=${ref}]`);
       next = depth + 1;
     }
-    for (const c of node.children) walk(c, next, inButton || (show && actionable(node)));
+    const inner = node.attrs.scrollable === "true" ? b : scroll;
+    for (const c of node.children) walk(c, next, inButton || (show && actionable(node)), inner);
   };
   walk(root, 0, false);
   return lines.join("\n");

@@ -100,6 +100,19 @@ await check("typing goes into the field that was asked for", async () => {
   return ['"Full name" value="Ann Lee"', '"Street address" value="1 Main St"', '"ZIP code" value="95014"'].every((s) => snap.includes(s));
 });
 
+// A button half under the edge of the list loses its text in uiautomator's dump. It once showed as
+// "(no label)" and an agent filed it as an accessibility bug. Checkout has no unlabeled buttons.
+await check("a button cut off at the edge is not reported as unlabeled", async () => {
+  await tool("launch_app");
+  await tool("tap", { ref: await ref(/button \(no label\)/) });
+  await tool("tap", { ref: await ref(/button "[^"]*Cart/) });
+  await tool("tap", { ref: await ref(/button "Checkout"/) });
+  await tool("tap", { ref: await ref(/button "Place order"/) });
+  const snap = await tool("snapshot");
+  console.log(snap);
+  return snap.includes("Please enter your name and address.") && !snap.includes("(no label)");
+});
+
 await check("screenshot returns an image", async () => (await tool("screenshot")).includes("[image]"));
 
 await client.close();
