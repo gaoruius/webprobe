@@ -33,8 +33,9 @@ export type AgentOptions = {
   // "start-only": navigate may only open the start page, so every other page has to be reached
   // by clicking, as a user would. Typing a URL skips the navigation a user depends on.
   navigate?: "any" | "start-only";
-  // "ios": the target is the iOS app behind ios-mcp, so the prompt talks about screens and crashes.
-  platform?: "web" | "ios";
+  // "ios" / "android": the target is a phone app behind ios-mcp or android-mcp, so the prompt
+  // talks about screens and crashes.
+  platform?: "web" | "ios" | "android";
   // A product spec (markdown). Without one the agent can only flag what contradicts the page
   // itself or common sense; with one it can check rules no page states.
   spec?: string;
@@ -109,10 +110,14 @@ When you confirm a bug, file it right away with report_bug. Report only what you
 
 You can only reach ${target}. Element refs change whenever the page updates, so take a new snapshot before clicking or typing on a changed page.${variant === "budget" ? budgetNote(maxSteps) : ""}${startOnly ? startOnlyNote(target) : ""}${spec ? specNote(spec) : ""}`;
 
-// The same tester, for the iOS app: screens instead of URLs, and a crash is a bug to report.
-const iosSystemPrompt = (spec?: string) => `You are a QA engineer testing the BuggyShop iOS app in the iPhone Simulator.
+// The same tester, for a phone app: screens instead of URLs, and a crash is a bug to report.
+const APPS = {
+  ios: { app: "the BuggyShop iOS app in the iPhone Simulator", reader: "VoiceOver" },
+  android: { app: "the BuggyShop Android app in the Android Emulator", reader: "TalkBack" },
+};
+const appSystemPrompt = (platform: "ios" | "android", spec?: string) => `You are a QA engineer testing ${APPS[platform].app}.
 
-Explore it the way a careful tester would: open every screen you can reach (tabs, lists, detail screens, every segment), use the main flows end to end, and try edge cases (empty, zero, negative and malformed input). After each action, take a snapshot and check what the screen shows. Elements with no accessibility label show as (no label); that matters to people who use VoiceOver.
+Explore it the way a careful tester would: open every screen you can reach (tabs, lists, detail screens, every segment), use the main flows end to end, and try edge cases (empty, zero, negative and malformed input). After each action, take a snapshot and check what the screen shows. Elements with no accessibility label show as (no label); that matters to people who use ${APPS[platform].reader}.
 
 If the app crashes, that is a bug: report it, then call launch_app to keep testing.
 
@@ -149,8 +154,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   const providerOptions: ProviderOptions = {
     model: opts.model,
     system:
-      opts.platform === "ios"
-        ? iosSystemPrompt(opts.spec)
+      opts.platform === "ios" || opts.platform === "android"
+        ? appSystemPrompt(opts.platform, opts.spec)
         : systemPrompt(opts.target, opts.prompt ?? "default", opts.maxSteps, opts.spec, opts.navigate === "start-only"),
     firstMessage: `Test ${opts.target} and report every bug you find.`,
     tools: [...browserTools, ...(opts.spec ? [localTools[0], specFinishTool] : localTools)],
@@ -175,8 +180,8 @@ export async function runAgent(opts: AgentOptions): Promise<AgentResult> {
   let step = 0;
   let finished = false;
   let error: string | undefined;
-  // Page tracking reads URLs out of browser output; an iOS run has no URLs, so no origin.
-  const origin = opts.platform === "ios" ? "" : new URL(opts.target).origin;
+  // Page tracking reads URLs out of browser output; an app run has no URLs, so no origin.
+  const origin = opts.platform === "ios" || opts.platform === "android" ? "" : new URL(opts.target).origin;
   const visited = new Set<string>();
   const linked = new Set<string>();
   const unvisited = () => [...linked].filter((p) => !visited.has(p));

@@ -127,7 +127,7 @@ export function passHatK(n: number, c: number, k: number): number {
 }
 
 type RunReport = {
-  platform?: "web" | "ios";
+  platform?: "web" | "ios" | "android";
   liveBugs?: string;
   provider?: string;
   model?: string;
@@ -157,10 +157,11 @@ function main(argv: string[]) {
     process.exit(1);
   }
 
-  // iOS runs are scored against the iOS app's answer key.
+  // App runs are scored against their own app's answer key.
   const manifests = {
     web: path.resolve(here, "../../buggyshop/bugs.manifest.json"),
     ios: path.resolve(here, "../../ios/bugs.manifest.json"),
+    android: path.resolve(here, "../../android/bugs.manifest.json"),
   };
   const load = (p: string) => JSON.parse(readFileSync(p, "utf8")) as { bugs: TruthBug[]; extras?: ExtraBug[] };
 
@@ -168,7 +169,7 @@ function main(argv: string[]) {
   const seen = new Map<string, TruthBug>();
   for (const dir of dirs) {
     const run = JSON.parse(readFileSync(path.join(dir, "report.json"), "utf8")) as RunReport;
-    const { bugs: truth, extras: extraBugs = [] } = load(manifests[run.platform === "ios" ? "ios" : "web"]);
+    const { bugs: truth, extras: extraBugs = [] } = load(manifests[run.platform ?? "web"]);
     for (const b of truth) seen.set(b.id, b);
     const live = override ?? run.liveBugs ?? "all";
     const bugs = liveBugs(truth, live);

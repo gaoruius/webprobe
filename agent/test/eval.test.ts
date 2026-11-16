@@ -222,6 +222,19 @@ test("iOS answer key: a crash on 'Reviews (0)' is the crash bug, not the zero-qu
   assert.deepEqual(s.found.map((f) => f.id), ["reviews-crash", "cart-zero-qty", "add-button-unlabeled"]);
 });
 
+test("Android answer key: the − button to 0 and a TalkBack-unnamed button are scored", () => {
+  const android = JSON.parse(readFileSync(new URL("../../android/bugs.manifest.json", import.meta.url), "utf8")) as { bugs: TruthBug[] };
+  const s = score(
+    [
+      report({ title: "Pressing − down to quantity 0 keeps the mug in the cart", page: "Cart", category: "functional" }),
+      report({ title: "Add-to-cart icon buttons have no content description for TalkBack", page: "Products", category: "a11y" }),
+      report({ title: "App crashes when opening Reviews (0) on Desk Lamp", page: "Desk Lamp", category: "functional" }),
+    ],
+    liveBugs(android.bugs, "all"),
+  );
+  assert.deepEqual(s.found.map((f) => f.id), ["cart-zero-qty", "add-button-unlabeled", "reviews-crash"]);
+});
+
 test("pass@k and pass^k match the lecture examples and the edge cases", () => {
   const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
   close(passAtK(5, 2, 3), 0.9); // 1 − C(3,3)/C(5,3)

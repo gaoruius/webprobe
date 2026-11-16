@@ -12,6 +12,7 @@ export const RUNS_DIR = process.env.WEBPROBE_RUNS ?? path.resolve(process.cwd(),
 const MANIFESTS = {
   web: path.resolve(process.cwd(), "../buggyshop/bugs.manifest.json"),
   ios: path.resolve(process.cwd(), "../ios/bugs.manifest.json"),
+  android: path.resolve(process.cwd(), "../android/bugs.manifest.json"),
 };
 
 export type ToolCall = { step: number; name: string; input: unknown; isError: boolean; output: string };
@@ -69,10 +70,10 @@ export type Run = {
 
 type Manifest = { bugs: TruthBug[]; extras?: ExtraBug[] };
 
-// Web runs are scored against the web shop's answer key, iOS runs against the iOS app's.
+// Web runs are scored against the web shop's answer key, app runs against their app's.
 const manifest = (platform: Platform = "web"): Manifest => JSON.parse(readFileSync(MANIFESTS[platform], "utf8"));
 
-export type Platform = "web" | "ios";
+export type Platform = "web" | "ios" | "android";
 
 export function truth(platform: Platform = "web"): TruthBug[] {
   return manifest(platform).bugs;
@@ -95,7 +96,7 @@ export function getRun(id: string): Run | null {
   const file = path.join(RUNS_DIR, id, "report.json");
   if (!existsSync(file)) return null;
   const raw = JSON.parse(readFileSync(file, "utf8"));
-  const platform: Platform = raw.platform === "ios" ? "ios" : "web";
+  const platform: Platform = raw.platform === "ios" || raw.platform === "android" ? raw.platform : "web";
   const bugs = truth(platform);
   const extraBugs = extras(platform);
   const live = raw.liveBugs ?? "all";
@@ -156,7 +157,7 @@ const mean = (xs: (number | null)[]) => {
 };
 
 const siteOf = (r: Run) =>
-  (r.platform === "ios" ? "iOS app, " : "") +
+  (r.platform === "ios" ? "iOS app, " : r.platform === "android" ? "Android app, " : "") +
   (r.score.live.length ? `${r.score.live.length} bugs` : "clean site") +
   (r.prompt && r.prompt !== "default" ? `, ${r.prompt} prompt` : "") +
   (r.coverageGate ? ", coverage gate" : "") +

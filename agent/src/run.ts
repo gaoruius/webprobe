@@ -15,12 +15,15 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { PROVIDERS, runAgent, type AgentOptions, type PromptVariant, type ProviderName } from "./agent.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-// WEBPROBE_PLATFORM=ios tests the iOS BuggyShop in the Simulator through ios-mcp instead of the
+// WEBPROBE_PLATFORM=ios tests the iOS BuggyShop in the Simulator through ios-mcp, =android the
+// Android one in the emulator through android-mcp, instead of the
 // web shop through browser-mcp. Each has its own answer key.
-const platform = process.env.WEBPROBE_PLATFORM === "ios" ? "ios" : "web";
-const MANIFEST =
-  platform === "ios" ? path.join(here, "../../ios/bugs.manifest.json") : path.join(here, "../../buggyshop/bugs.manifest.json");
-const target = platform === "ios" ? "the BuggyShop iOS app" : (process.env.WEBPROBE_TARGET ?? "http://localhost:3000");
+const platform = process.env.WEBPROBE_PLATFORM === "ios" || process.env.WEBPROBE_PLATFORM === "android" ? process.env.WEBPROBE_PLATFORM : "web";
+const MANIFEST = path.join(here, `../../${platform === "web" ? "buggyshop" : platform}/bugs.manifest.json`);
+const target =
+  platform === "ios" ? "the BuggyShop iOS app"
+  : platform === "android" ? "the BuggyShop Android app"
+  : (process.env.WEBPROBE_TARGET ?? "http://localhost:3000");
 // Default to whichever provider we have a key for, in this order.
 const KEY_VARS: Record<ProviderName, string> = {
   claude: "ANTHROPIC_API_KEY",
@@ -37,7 +40,10 @@ const model = process.env.WEBPROBE_MODEL || undefined;
 // NEXT_PUBLIC_BUGS BuggyShop was started with ("none" for `npm run dev:clean`).
 // The agent never sees it.
 // "all" is recorded as the explicit list, so old runs still score right after bugs are added.
-const liveBugsSetting = (platform === "ios" ? process.env.WEBPROBE_IOS_BUGS : process.env.WEBPROBE_LIVE_BUGS) ?? "all";
+const liveBugsSetting =
+  (platform === "ios" ? process.env.WEBPROBE_IOS_BUGS
+  : platform === "android" ? process.env.WEBPROBE_ANDROID_BUGS
+  : process.env.WEBPROBE_LIVE_BUGS) ?? "all";
 // The browser server reads this too (it passes through the environment) and emulates the device.
 const device = process.env.WEBPROBE_DEVICE || undefined;
 const navigate = process.env.WEBPROBE_NAVIGATE === "start-only" ? "start-only" : "any";
@@ -84,7 +90,7 @@ await mcp.connect(
   new StdioClientTransport({
     command: "npx",
     args: ["tsx", "src/server.ts"],
-    cwd: path.resolve(here, platform === "ios" ? "../../ios-mcp" : "../../browser-mcp"),
+    cwd: path.resolve(here, platform === "web" ? "../../browser-mcp" : `../../${platform}-mcp`),
     env: env as Record<string, string>,
     stderr: "ignore",
   }),
