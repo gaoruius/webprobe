@@ -32,7 +32,10 @@ webprobe/
 │   ├── BuggyShop/        SwiftUI app with switchable bugs (BUGS)
 │   ├── WebProbeDriver/   XCUITest driver: an HTTP server inside a UI test
 │   └── bugs.manifest.json  ground truth for the iOS app
-└── ios-mcp/              MCP server for the iOS app: launch_app, snapshot, tap, type, swipe
+├── ios-mcp/              MCP server for the iOS app: launch_app, snapshot, tap, type, swipe
+├── android/              the Android version of the shop (Kotlin, Jetpack Compose)
+│   └── bugs.manifest.json  ground truth for the Android app
+└── android-mcp/          MCP server for the Android app, over adb and uiautomator: same tools
 ```
 
 ## Run it
@@ -538,6 +541,44 @@ In CI: an `ios` job on a macOS runner (free for public repositories) runs [ios/c
 it picks the newest Xcode and an iPhone simulator by UDID, builds the app and the driver, and runs
 the smoke test. No model calls.
 
+## Android app
+
+The same shop and the same eight bugs, in Kotlin with Jetpack Compose, behind an MCP server with
+the same six tools as ios-mcp. The agent needs no change: `WEBPROBE_PLATFORM=android`.
+
+```
+agent loop ──MCP──▶ android-mcp (TypeScript) ──adb──▶ uiautomator + input ──▶ BuggyShop Android (Compose)
+```
+
+- **[android/app](android/app/src/main/java/dev/webprobe/buggyshop)**: products (search, sort
+  chips), product detail (Description / Reviews tabs), cart (− and + buttons, coupon), checkout,
+  sign up. Bugs come from a `BUGS` intent extra. Answer key:
+  [android/bugs.manifest.json](android/bugs.manifest.json).
+- **[android-mcp](android-mcp/src/server.ts)** needs no driver of its own, unlike iOS: Android ships
+  the pieces. `uiautomator dump` gives the accessibility tree as XML, which it turns into the same
+  snapshot shape (a button's name is what TalkBack would read: its content description, or the
+  texts inside it); `input tap/text/swipe` act; `pidof` tells a crash from a quiet screen;
+  `screencap` takes the PNG. The lessons from the iOS driver carried over: it finds the live
+  element again before tapping, hides the keyboard first, and refuses to type unless the field the
+  agent asked for has focus.
+- **No local Android setup.** The APK is built and tested only in CI: an `android` job builds it
+  with Gradle and runs [android/ci.sh](android/ci.sh) on an emulator (KVM on a Linux runner, free
+  for public repositories), which installs it and runs the smoke test, 7 checks.
+
+```bash
+cd android && gradle assembleDebug                  # needs JDK 17 + the Android SDK
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+cd android-mcp && npm install && npm run smoke      # with an emulator running
+cd agent && WEBPROBE_PLATFORM=android npm start     # WEBPROBE_ANDROID_BUGS=all|none|ids
+```
+
+**The first CI run found a test-harness bug, not an app bug.** Six of seven checks passed; the
+crash check couldn't find the Desk Lamp after a relaunch. The snapshot showed the search field
+focused and the list squeezed by the keyboard. The cause: `input keyevent` (used to close the
+keyboard) takes Android out of touch mode, and out of touch mode a new screen focuses its first
+text field by itself. A person tapping never sees that. android-mcp now taps once before each
+launch to restore touch mode.
+
 ## Roadmap
 
 - [x] BuggyShop with 5 switchable bugs + ground-truth manifest
@@ -564,6 +605,8 @@ the smoke test. No model calls.
 - [x] iOS app: SwiftUI shop, an XCUITest driver, ios-mcp
 - [x] iOS at 60 steps: 96% recall, 100% precision, the crash found 3/3
 - [x] iOS in CI: build + smoke test on a macOS runner
+- [x] Android app: Compose shop, android-mcp over adb, built and smoke-tested in CI
+- [ ] Android agent runs (needs the emulator: in CI with an API key secret)
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split
