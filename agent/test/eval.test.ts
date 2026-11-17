@@ -235,6 +235,23 @@ test("Android answer key: the − button to 0 and a TalkBack-unnamed button are 
   assert.deepEqual(s.found.map((f) => f.id), ["cart-zero-qty", "add-button-unlabeled", "reviews-crash"]);
 });
 
+test("Android answer key: an empty order charged shipping is the extra, not the free-shipping bug", () => {
+  const android = JSON.parse(readFileSync(new URL("../../android/bugs.manifest.json", import.meta.url), "utf8")) as {
+    bugs: TruthBug[];
+    extras: ExtraBug[];
+  };
+  const empty = report({
+    title: "Empty cart can be checked out and charged shipping",
+    page: "Checkout",
+    category: "functional",
+    actual: "Checkout shows Subtotal $0.00, Shipping $5.00, Order total $5.00",
+  });
+  const over = report({ title: "Shipping is charged on orders over $50 despite free-shipping promise", page: "Checkout", category: "functional" });
+  const s = score([empty, over], liveBugs(android.bugs, "all"), android.extras);
+  assert.deepEqual(s.found.map((f) => f.id), ["checkout-free-shipping"]);
+  assert.equal(s.extras.length, 1);
+});
+
 test("pass@k and pass^k match the lecture examples and the edge cases", () => {
   const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
   close(passAtK(5, 2, 3), 0.9); // 1 − C(3,3)/C(5,3)

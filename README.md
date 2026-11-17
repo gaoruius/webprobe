@@ -572,6 +572,29 @@ cd android-mcp && npm install && npm run smoke      # with an emulator running
 cd agent && WEBPROBE_PLATFORM=android npm start     # WEBPROBE_ANDROID_BUGS=all|none|ids
 ```
 
+Haiku 5.5, 60 steps, 3 runs in CI ([android-agent.yml](.github/workflows/android-agent.yml), by hand
+only, with an API key secret):
+
+| | recall | precision | the crash | steps used | cost / run |
+|---|---|---|---|---|---|
+| Android, 60 steps | **96%** | **97%** | 3/3 | 48–58 (stopped by itself) | ~$0.02 |
+| iOS, 60 steps (for comparison) | 96% | 100% | 3/3 | 52–56 | ~$0.02 |
+
+Two runs found all eight bugs. The third missed free shipping but found **a real bug nobody
+seeded**: after an order, the Cart tab still opens Checkout, and an empty order can be placed and
+charged $5 shipping (`checkout` stays true and Checkout has no empty-cart check). It's an extra in
+the answer key now. At first the scorer credited that report as the free-shipping bug, because
+both mention "shipping"; the pattern now needs "free shipping", "$50" or "threshold", and a test
+covers the case. The one false positive: the Products tab reopens the last product (tabs keep
+their screen, as on iOS).
+
+**An earlier batch was set aside because of the tool, not the agent.** One run filed "Place order
+has no label." It had a label: after the error message, the button sat half under the edge of the
+list, and uiautomator leaves out what the user can't see, including the button's text. The scorer
+had even counted it as the unlabeled-button bug. android-mcp now shows such a button as `partly
+off screen: swipe to see it`, a smoke check covers it, and those three runs went to
+`agent/runs-discarded/`.
+
 **The first CI run found a test-harness bug, not an app bug.** Six of seven checks passed; the
 crash check couldn't find the Desk Lamp after a relaunch. The snapshot showed the search field
 focused and the list squeezed by the keyboard. The cause: `input keyevent` (used to close the
@@ -606,7 +629,7 @@ launch to restore touch mode.
 - [x] iOS at 60 steps: 96% recall, 100% precision, the crash found 3/3
 - [x] iOS in CI: build + smoke test on a macOS runner
 - [x] Android app: Compose shop, android-mcp over adb, built and smoke-tested in CI
-- [ ] Android agent runs (needs the emulator: in CI with an API key secret)
+- [x] Android at 60 steps (in CI): 96% recall, 97% precision, the crash 3/3, 1 unseeded bug found
 - [x] false-positive runs on the clean build: 1 false positive in 2 runs
 - [ ] keep bug evidence when old tool results are masked (e.g. a notes tool)
 - [ ] 35 bugs + 10 clean pages + 3 prompt-injection pages; dev/test split

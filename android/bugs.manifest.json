@@ -39,7 +39,7 @@
       "severity": "major",
       "page": "*",
       "summary": "Orders over $50 are still charged $5 shipping: the check uses the item count.",
-      "match": "shipping"
+      "match": "free.?shipping|\\$50|threshold"
     },
     {
       "id": "coupon-silent",
@@ -67,5 +67,14 @@
     }
   ],
   "extras_description": "Real defects that were not seeded: an agent reported them and a person confirmed them in the code. Matched on the title only. They count as correct for precision, not for recall.",
-  "extras": []
+  "extras": [
+    {
+      "id": "checkout-empty-order",
+      "page": "*",
+      "match": "empty (cart|order)|stale checkout|\\$0(\\.00)? (order|subtotal)",
+      "summary": "After an order is placed, the Cart tab still opens Checkout, and an empty order can be placed and charged $5 shipping.",
+      "confirmed": "App.kt leaves `checkout = true` after an order, and Checkout has no empty-cart check; switching tabs drops its `placed` state, so the form comes back with a $0.00 subtotal.",
+      "first_reported": "claude-haiku-5-5 on Android, 2026-11-16"
+    }
+  ]
 }
