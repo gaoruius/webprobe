@@ -252,6 +252,24 @@ test("Android answer key: an empty order charged shipping is the extra, not the 
   assert.equal(s.extras.length, 1);
 });
 
+test("'Added' that still adds is its own extra, apart from 'Added' left over after an order", () => {
+  const ios = JSON.parse(readFileSync(new URL("../../ios/bugs.manifest.json", import.meta.url), "utf8")) as {
+    bugs: TruthBug[];
+    extras: ExtraBug[];
+  };
+  const s = score(
+    [
+      report({ title: "'Added' button still adds another unit when tapped again", page: "Ceramic Mug", category: "functional" }),
+      report({ title: "Tapping 'Added' on product detail keeps adding the item to the cart", page: "Ceramic Mug", category: "functional" }),
+      report({ title: "Product detail still shows 'Added' after the cart was emptied by placing an order", page: "Desk Lamp", category: "functional" }),
+    ],
+    liveBugs(ios.bugs, "all"),
+    ios.extras,
+  );
+  const ids = s.extras.map((e) => e.id);
+  assert.deepEqual(ids, ["detail-added-adds-more", "detail-added-adds-more", "detail-added-stale"]);
+});
+
 test("pass@k and pass^k match the lecture examples and the edge cases", () => {
   const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
   close(passAtK(5, 2, 3), 0.9); // 1 − C(3,3)/C(5,3)

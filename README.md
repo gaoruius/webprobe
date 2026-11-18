@@ -586,7 +586,9 @@ charged $5 shipping (`checkout` stays true and Checkout has no empty-cart check)
 the answer key now. At first the scorer credited that report as the free-shipping bug, because
 both mention "shipping"; the pattern now needs "free shipping", "$50" or "threshold", and a test
 covers the case. The one false positive: the Products tab reopens the last product (tabs keep
-their screen, as on iOS).
+their screen, as on iOS). A second extra came from the set-aside runs below: once a product page says
+"Added", each further tap still adds another unit, with nothing on the page to show it. The label
+reads as a state on a button that still acts. Both apps have it, so it's in both answer keys.
 
 **An earlier batch was set aside because of the tool, not the agent.** One run filed "Place order
 has no label." It had a label: after the error message, the button sat half under the edge of the

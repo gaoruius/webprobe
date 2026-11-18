@@ -69,6 +69,14 @@
   "extras_description": "Real defects that were not seeded: an agent reported them and a person confirmed them in the code. Matched on the title only. They count as correct for precision, not for recall.",
   "extras": [
     {
+      "id": "detail-added-adds-more",
+      "page": "*",
+      "match": "\\badded\\b[^\\n]*\\b(adds|adding|another|again|more|extra)\\b|\\b(adds|adding)\\b[^\\n]*\\badded\\b",
+      "summary": "After the first tap the product page's button says 'Added', but each further tap adds another unit, with nothing on the page to show it.",
+      "confirmed": "The button only switches its text on `added`; its action is always store.add(product). A label that reads as a state, on a button that still acts, misleads sighted and screen-reader users alike.",
+      "first_reported": "claude-haiku-5-5 on Android, 2026-11-16"
+    },
+    {
       "id": "detail-added-stale",
       "page": "*",
       "match": "\\badded\\b",
